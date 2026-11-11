@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <defs>
+    <linearGradient id="novaGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2563EB"/>
+      <stop offset="100%" stop-color="#06B6D4"/>
+    </linearGradient>
+  </defs>
+  <rect width="100" height="100" rx="28" fill="#080D19"/>
+  <rect x="4" y="4" width="92" height="92" rx="24" fill="none" stroke="url(#novaGrad)" stroke-width="3"/>
+  <path d="M28 32 C28 26, 34 22, 50 22 C66 22, 72 26, 72 32 C72 44, 58 48, 58 54 C58 57, 54 60, 50 60 C46 60, 42 57, 42 54" fill="none" stroke="url(#novaGrad)" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="50" cy="74" r="5" fill="#06B6D4"/>
+  <circle cx="32" cy="46" r="3" fill="#2563EB"/>
+  <circle cx="68" cy="46" r="3" fill="#06B6D4"/>
+</svg>
+
