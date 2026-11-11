@@ -713,3 +713,60 @@ class MessageEncryptionKey(models.Model):
 
     def __str__(self):
         return f"E2EE Key for {self.user.username} (Device: {self.device_id[:8]})"
+
+
+class ScheduledMessage(models.Model):
+    """
+    Messages queued for future automated delivery.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='scheduled_messages')
+    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='scheduled_messages')
+    content = models.TextField()
+    scheduled_for = models.DateTimeField(db_index=True)
+    is_sent = models.BooleanField(default=False)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['scheduled_for']
+
+    def __str__(self):
+        return f"Scheduled message by {self.sender.username} for {self.scheduled_for}"
+
+
+class PersonalNote(models.Model):
+    """
+    Personal scratchpad notes for self-reminders and saved snippets.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='personal_notes')
+    title = models.CharField(max_length=200, blank=True)
+    content = models.TextField()
+    color = models.CharField(max_length=20, default='#1E293B')
+    is_pinned = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-is_pinned', '-updated_at']
+
+    def __str__(self):
+        return self.title or f"Note {self.id}"
+
+
+class MessageDraft(models.Model):
+    """
+    Persistent draft message per conversation.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='drafts')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='drafts')
+    content = models.TextField(blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('conversation', 'user')
+
+    def __str__(self):
+        return f"Draft by {self.user.username} in {self.conversation_id}"
