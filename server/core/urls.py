@@ -48,6 +48,12 @@ from .ai_views import (
     AITranslateAPIView, AIWritingAssistantAPIView, AIVoiceTranscriptionAPIView,
     AIConversationInsightsAPIView
 )
+from .security_views import (
+    RegisterEncryptionKeysAPIView, UserKeyBundleAPIView,
+    BlockedUsersListAPIView, UnblockUserAPIView,
+    SubmitReportAPIView, DisappearingMessagesConfigAPIView,
+    PurgeExpiredDisappearingMessagesAPIView
+)
 
 urlpatterns = [
     # Authentication & Security
@@ -137,4 +143,13 @@ urlpatterns = [
     path('ai/writing-assistant/', AIWritingAssistantAPIView.as_view(), name='ai_writing_assistant'),
     path('ai/transcribe/', AIVoiceTranscriptionAPIView.as_view(), name='ai_transcribe'),
     path('conversations/<uuid:conv_id>/insights/', AIConversationInsightsAPIView.as_view(), name='ai_conversation_insights'),
+
+    # Privacy, Security, E2EE Key Management & Reporting
+    path('security/keys/register/', RegisterEncryptionKeysAPIView.as_view(), name='security_register_keys'),
+    path('security/keys/<uuid:user_id>/', UserKeyBundleAPIView.as_view(), name='security_user_key_bundle'),
+    path('security/blocked/', BlockedUsersListAPIView.as_view(), name='security_blocked_list'),
+    path('security/blocked/<uuid:user_id>/', UnblockUserAPIView.as_view(), name='security_unblock_user'),
+    path('security/reports/', SubmitReportAPIView.as_view(), name='security_submit_report'),
+    path('conversations/<uuid:conv_id>/disappearing/', DisappearingMessagesConfigAPIView.as_view(), name='disappearing_messages_config'),
+    path('security/disappearing/purge/', PurgeExpiredDisappearingMessagesAPIView.as_view(), name='disappearing_messages_purge'),
 ]
