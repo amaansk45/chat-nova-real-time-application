@@ -35,6 +35,10 @@ from .group_views import (
     GroupPollListCreateAPIView, GroupPollVoteAPIView,
     GroupPollCloseAPIView
 )
+from .status_views import (
+    StatusFeedAPIView, CreateStatusAPIView, StatusDetailAPIView,
+    RecordStatusViewAPIView, StatusReactionAPIView, ReplyToStatusAPIView
+)
 
 urlpatterns = [
     # Authentication & Security
@@ -101,4 +105,12 @@ urlpatterns = [
     path('conversations/<uuid:conv_id>/polls/', GroupPollListCreateAPIView.as_view(), name='group_polls_list_create'),
     path('polls/<uuid:poll_id>/vote/', GroupPollVoteAPIView.as_view(), name='group_poll_vote'),
     path('polls/<uuid:poll_id>/close/', GroupPollCloseAPIView.as_view(), name='group_poll_close'),
+
+    # 24-Hour Stories & Status Updates
+    path('status/feed/', StatusFeedAPIView.as_view(), name='status_feed'),
+    path('status/create/', CreateStatusAPIView.as_view(), name='status_create'),
+    path('status/<uuid:status_id>/', StatusDetailAPIView.as_view(), name='status_detail'),
+    path('status/<uuid:status_id>/view/', RecordStatusViewAPIView.as_view(), name='status_record_view'),
+    path('status/<uuid:status_id>/react/', StatusReactionAPIView.as_view(), name='status_react'),
+    path('status/<uuid:status_id>/reply/', ReplyToStatusAPIView.as_view(), name='status_reply'),
 ]
