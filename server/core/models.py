@@ -173,3 +173,85 @@ class ConversationMember(models.Model):
 
     def __str__(self):
         return f"{self.user.username} in {self.conversation.title or self.conversation.id} ({self.role})"
+
+
+class Message(models.Model):
+    """
+    Message model supporting diverse content types, threading, reactions,
+    disappearing timers, forwarding, and soft-deletion.
+    """
+    TYPE_CHOICES = [
+        ('text', 'Text Message'),
+        ('image', 'Image'),
+        ('video', 'Video'),
+        ('audio', 'Audio'),
+        ('voice', 'Voice Note'),
+        ('document', 'Document'),
+        ('location', 'Location Pin'),
+        ('contact', 'Contact Card'),
+        ('poll', 'Poll'),
+        ('system', 'System Notification'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='messages')
+    sender = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='sent_messages')
+    message_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='text')
+    
+    content = models.TextField(blank=True)
+    reply_to = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='replies')
+    forward_from = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='forwards')
+    
+    is_edited = models.BooleanField(default=False)
+    edited_at = models.DateTimeField(null=True, blank=True)
+    
+    is_deleted_for_everyone = models.BooleanField(default=False)
+    deleted_for_users = models.ManyToManyField(User, related_name='deleted_messages', blank=True)
+    
+    is_pinned = models.BooleanField(default=False)
+    pinned_at = models.DateTimeField(null=True, blank=True)
+    is_starred_by = models.ManyToManyField(User, related_name='starred_messages', blank=True)
+    
+    # Flexible structured payload (coordinates, vCard info, call logs, poll reference)
+    metadata = models.JSONField(default=dict, blank=True)
+    
+    disappears_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['created_at']
+        indexes = [
+            models.Index(fields=['conversation', 'created_at']),
+            models.Index(fields=['sender', 'created_at']),
+            models.Index(fields=['disappears_at']),
+        ]
+
+    def __str__(self):
+        return f"Msg {self.id} in {self.conversation_id} by {self.sender_id}"
+
+
+class MessageReceipt(models.Model):
+    """
+    Message delivery and read receipt timestamps per recipient.
+    """
+    STATUS_CHOICES = [
+        ('sent', 'Sent to Server'),
+        ('delivered', 'Delivered to Device'),
+        ('read', 'Read by Recipient'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    message = models.ForeignKey(Message, on_delete=models.CASCADE, related_name='receipts')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='message_receipts')
+    status = models.CharField(max_length=15, choices=STATUS_CHOICES, default='sent')
+    timestamp = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        unique_together = ('message', 'user', 'status')
+        indexes = [
+            models.Index(fields=['message', 'user', 'status']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.message_id} ({self.status})"
