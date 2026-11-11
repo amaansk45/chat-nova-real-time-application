@@ -182,3 +182,26 @@ export interface CallSession {
     is_screen_sharing: boolean;
   }[];
 }
+
+export interface Call {
+  id: string;
+  caller: User;
+  receiver?: User;
+  conversation_id?: string | null;
+  call_type: 'audio' | 'video' | 'group';
+  status: 'ringing' | 'active' | 'ended' | 'rejected' | 'missed' | 'busy';
+  duration?: number | null;
+  created_at: string;
+}
+
+export interface Notification {
+  id: string;
+  recipient: User;
+  actor?: User | null;
+  notification_type: string;
+  title: string;
+  body: string;
+  is_read: boolean;
+  action_url?: string;
+  created_at: string;
+}
