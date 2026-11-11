@@ -106,3 +106,70 @@ class ContactSync(models.Model):
 
     def __str__(self):
         return f"{self.user.username}: {self.contact_name}"
+
+
+class Conversation(models.Model):
+    """
+    Core conversation entity supporting direct chats, group chats, and broadcast channels.
+    """
+    TYPE_CHOICES = [
+        ('direct', 'Direct Message'),
+        ('group', 'Group Chat'),
+        ('channel', 'Broadcast Channel'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    type = models.CharField(max_length=15, choices=TYPE_CHOICES, default='direct', db_index=True)
+    title = models.CharField(max_length=200, blank=True)
+    description = models.TextField(blank=True)
+    avatar = models.ImageField(upload_to='conversation_avatars/', blank=True, null=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='created_conversations')
+    
+    is_archived_by = models.ManyToManyField(User, related_name='archived_conversations', blank=True)
+    is_muted_by = models.ManyToManyField(User, related_name='muted_conversations', blank=True)
+    
+    # Disappearing messages timer (seconds: 0=disabled, 86400=24h, 604800=7d, 7776000=90d)
+    disappearing_messages_duration = models.IntegerField(default=0)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+
+    def __str__(self):
+        return self.title or f"Conversation {self.id}"
+
+
+class ConversationMember(models.Model):
+    """
+    Membership linking a user to a conversation with specific roles and preferences.
+    """
+    ROLE_CHOICES = [
+        ('owner', 'Owner'),
+        ('admin', 'Admin'),
+        ('moderator', 'Moderator'),
+        ('member', 'Member'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='members')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='conversation_memberships')
+    role = models.CharField(max_length=15, choices=ROLE_CHOICES, default='member')
+    
+    joined_at = models.DateTimeField(auto_now_add=True)
+    is_pinned = models.BooleanField(default=False)
+    is_muted = models.BooleanField(default=False)
+    is_archived = models.BooleanField(default=False)
+    custom_wallpaper = models.CharField(max_length=255, blank=True)
+    unread_count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        unique_together = ('conversation', 'user')
+        indexes = [
+            models.Index(fields=['conversation', 'user']),
+            models.Index(fields=['user', 'is_pinned']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} in {self.conversation.title or self.conversation.id} ({self.role})"
