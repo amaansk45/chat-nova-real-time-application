@@ -107,10 +107,14 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
 
           <div className="flex items-center gap-1.5 flex-shrink-0">
             {conversation.is_muted && (
-              <VolumeX className="w-3.5 h-3.5 text-nova-muted" title="Muted" />
+              <span title="Muted">
+                <VolumeX className="w-3.5 h-3.5 text-nova-muted" />
+              </span>
             )}
             {conversation.is_pinned && (
-              <Pin className="w-3.5 h-3.5 text-nova-accent fill-nova-accent/20" title="Pinned" />
+              <span title="Pinned">
+                <Pin className="w-3.5 h-3.5 text-nova-accent fill-nova-accent/20" />
+              </span>
             )}
             {conversation.unread_count > 0 && (
               <Badge variant="primary" size="sm" rounded>

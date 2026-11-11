@@ -48,12 +48,24 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     const status = message.delivery_status || 'sent';
 
     if (status === 'read') {
-      return <CheckCheck className="w-3.5 h-3.5 text-nova-accent inline ml-1" title="Read" />;
+      return (
+        <span title="Read">
+          <CheckCheck className="w-3.5 h-3.5 text-nova-accent inline ml-1" />
+        </span>
+      );
     }
     if (status === 'delivered') {
-      return <CheckCheck className="w-3.5 h-3.5 text-slate-400 inline ml-1" title="Delivered" />;
+      return (
+        <span title="Delivered">
+          <CheckCheck className="w-3.5 h-3.5 text-slate-400 inline ml-1" />
+        </span>
+      );
     }
-    return <Check className="w-3.5 h-3.5 text-slate-400 inline ml-1" title="Sent" />;
+    return (
+      <span title="Sent">
+        <Check className="w-3.5 h-3.5 text-slate-400 inline ml-1" />
+      </span>
+    );
   };
 
   if (message.is_deleted_for_everyone) {
@@ -278,7 +290,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             }`}
           >
             {message.disappears_at && (
-              <Clock className="w-3 h-3 text-nova-accent inline mr-0.5" title="Disappearing message" />
+              <span title="Disappearing message">
+                <Clock className="w-3 h-3 text-nova-accent inline mr-0.5" />
+              </span>
             )}
             {message.is_edited && <span className="italic mr-0.5">(edited)</span>}
             <span>{formatTime(message.created_at)}</span>

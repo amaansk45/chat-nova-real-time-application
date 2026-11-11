@@ -152,7 +152,9 @@ export const UserProfilePage: React.FC = () => {
                       {firstName ? `${firstName} ${lastName}` : user?.username}
                     </h2>
                     {user?.is_verified && (
-                      <ShieldCheck className="w-5 h-5 text-nova-accent" title="Verified Account" />
+                      <span title="Verified Account">
+                        <ShieldCheck className="w-5 h-5 text-nova-accent" />
+                      </span>
                     )}
                   </div>
                   <span className="text-xs text-nova-muted">@{user?.username}</span>
