@@ -48,6 +48,17 @@ from .ai_views import (
     AITranslateAPIView, AIWritingAssistantAPIView, AIVoiceTranscriptionAPIView,
     AIConversationInsightsAPIView
 )
+from .security_views import (
+    RegisterEncryptionKeysAPIView, UserKeyBundleAPIView,
+    BlockedUsersListAPIView, UnblockUserAPIView,
+    SubmitReportAPIView, DisappearingMessagesConfigAPIView,
+    PurgeExpiredDisappearingMessagesAPIView
+)
+from .admin_views import (
+    AdminOverviewAPIView, AdminUserListAPIView, AdminUserActionAPIView,
+    AdminGroupListAPIView, AdminGroupDeleteAPIView, AdminReportListAPIView,
+    AdminResolveReportAPIView, AdminServerHealthAPIView, AdminAppSettingsAPIView
+)
 
 urlpatterns = [
     # Authentication & Security
@@ -137,4 +148,24 @@ urlpatterns = [
     path('ai/writing-assistant/', AIWritingAssistantAPIView.as_view(), name='ai_writing_assistant'),
     path('ai/transcribe/', AIVoiceTranscriptionAPIView.as_view(), name='ai_transcribe'),
     path('conversations/<uuid:conv_id>/insights/', AIConversationInsightsAPIView.as_view(), name='ai_conversation_insights'),
+
+    # Privacy, Security, E2EE Key Management & Reporting
+    path('security/keys/register/', RegisterEncryptionKeysAPIView.as_view(), name='security_register_keys'),
+    path('security/keys/<uuid:user_id>/', UserKeyBundleAPIView.as_view(), name='security_user_key_bundle'),
+    path('security/blocked/', BlockedUsersListAPIView.as_view(), name='security_blocked_list'),
+    path('security/blocked/<uuid:user_id>/', UnblockUserAPIView.as_view(), name='security_unblock_user'),
+    path('security/reports/', SubmitReportAPIView.as_view(), name='security_submit_report'),
+    path('conversations/<uuid:conv_id>/disappearing/', DisappearingMessagesConfigAPIView.as_view(), name='disappearing_messages_config'),
+    path('security/disappearing/purge/', PurgeExpiredDisappearingMessagesAPIView.as_view(), name='disappearing_messages_purge'),
+
+    # Administrative Dashboard & Moderation
+    path('admin-api/overview/', AdminOverviewAPIView.as_view(), name='admin_overview'),
+    path('admin-api/users/', AdminUserListAPIView.as_view(), name='admin_users_list'),
+    path('admin-api/users/<uuid:user_id>/action/', AdminUserActionAPIView.as_view(), name='admin_user_action'),
+    path('admin-api/groups/', AdminGroupListAPIView.as_view(), name='admin_groups_list'),
+    path('admin-api/groups/<uuid:group_id>/', AdminGroupDeleteAPIView.as_view(), name='admin_group_delete'),
+    path('admin-api/reports/', AdminReportListAPIView.as_view(), name='admin_reports_list'),
+    path('admin-api/reports/<uuid:report_id>/resolve/', AdminResolveReportAPIView.as_view(), name='admin_report_resolve'),
+    path('admin-api/health/', AdminServerHealthAPIView.as_view(), name='admin_server_health'),
+    path('admin-api/settings/', AdminAppSettingsAPIView.as_view(), name='admin_app_settings'),
 ]
