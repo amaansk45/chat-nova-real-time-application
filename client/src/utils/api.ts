@@ -32,7 +32,7 @@ api.interceptors.response.use(
 
       if (refreshToken) {
         try {
-          const res = await axios.post(`${API_BASE_URL}/auth/token/refresh/`, {
+          const res = await axios.post(`${API_BASE_URL}/api/auth/token/refresh/`, {
             refresh: refreshToken,
           });
 

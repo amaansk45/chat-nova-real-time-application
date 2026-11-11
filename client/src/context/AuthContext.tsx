@@ -38,7 +38,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const refreshUser = async () => {
     try {
-      const res = await api.get('/auth/me/');
+      const res = await api.get('/api/auth/me/');
       setUser(res.data);
       localStorage.setItem('chatnova_user', JSON.stringify(res.data));
     } catch {
@@ -47,7 +47,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const login = async (identifier: string, password: string) => {
-    const res = await api.post('/auth/login/', { identifier, password });
+    const res = await api.post('/api/auth/login/', { identifier, password });
     if (res.data.requires_2fa) {
       return { requires_2fa: true, identifier: res.data.identifier };
     }
@@ -61,7 +61,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const verify2FA = async (identifier: string, code: string) => {
-    const res = await api.post('/auth/login/2fa/', { identifier, code });
+    const res = await api.post('/api/auth/login/2fa/', { identifier, code });
     const { tokens, user: userData } = res.data;
     localStorage.setItem('chatnova_access_token', tokens.access);
     localStorage.setItem('chatnova_refresh_token', tokens.refresh);
@@ -125,7 +125,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = async () => {
     try {
       const refresh = localStorage.getItem('chatnova_refresh_token');
-      await api.post('/auth/logout/', { refresh_token: refresh });
+      await api.post('/api/auth/logout/', { refresh_token: refresh });
     } catch {}
     localStorage.removeItem('chatnova_access_token');
     localStorage.removeItem('chatnova_refresh_token');
