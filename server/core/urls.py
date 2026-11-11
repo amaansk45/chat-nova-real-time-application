@@ -28,6 +28,13 @@ from .media_views import (
     ShareLocationAPIView, ShareContactAPIView,
     FileDownloadAPIView
 )
+from .group_views import (
+    CreateGroupAPIView, GroupDetailAPIView, GroupMembersAPIView,
+    GroupMemberActionAPIView, GroupInviteLinkAPIView,
+    JoinGroupViaInviteAPIView, GroupPermissionsAPIView,
+    GroupPollListCreateAPIView, GroupPollVoteAPIView,
+    GroupPollCloseAPIView
+)
 
 urlpatterns = [
     # Authentication & Security
@@ -82,4 +89,16 @@ urlpatterns = [
     path('conversations/<uuid:conv_id>/share/location/', ShareLocationAPIView.as_view(), name='share_location'),
     path('conversations/<uuid:conv_id>/share/contact/', ShareContactAPIView.as_view(), name='share_contact'),
     path('attachments/<uuid:attachment_id>/download/', FileDownloadAPIView.as_view(), name='file_download'),
+
+    # Group Conversations, Administration & Polls
+    path('groups/create/', CreateGroupAPIView.as_view(), name='group_create'),
+    path('groups/<uuid:group_id>/', GroupDetailAPIView.as_view(), name='group_detail'),
+    path('groups/<uuid:group_id>/members/', GroupMembersAPIView.as_view(), name='group_members'),
+    path('groups/<uuid:group_id>/members/action/', GroupMemberActionAPIView.as_view(), name='group_member_action'),
+    path('groups/<uuid:group_id>/invite/', GroupInviteLinkAPIView.as_view(), name='group_invite_link'),
+    path('groups/join/<str:token>/', JoinGroupViaInviteAPIView.as_view(), name='group_join_via_invite'),
+    path('groups/<uuid:group_id>/permissions/', GroupPermissionsAPIView.as_view(), name='group_permissions'),
+    path('conversations/<uuid:conv_id>/polls/', GroupPollListCreateAPIView.as_view(), name='group_polls_list_create'),
+    path('polls/<uuid:poll_id>/vote/', GroupPollVoteAPIView.as_view(), name='group_poll_vote'),
+    path('polls/<uuid:poll_id>/close/', GroupPollCloseAPIView.as_view(), name='group_poll_close'),
 ]
