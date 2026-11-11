@@ -1,7 +1,8 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions
-from django.db.models import Q
+from django.db import models
+from django.db.models import Q, F
 from django.utils import timezone
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
@@ -238,7 +239,7 @@ class MessageListCreateAPIView(APIView):
 
             # Update conversation timestamp & increment unread for other members
             conv.save(update_fields=['updated_at'])
-            ConversationMember.objects.filter(conversation=conv).exclude(user=user).update(unread_count=models.F('unread_count') + 1) if hasattr(models, 'F') else None
+            ConversationMember.objects.filter(conversation=conv).exclude(user=user).update(unread_count=F('unread_count') + 1)
 
             # Broadcast via Channels layer
             try:
