@@ -482,3 +482,76 @@ class StatusReaction(models.Model):
 
     def __str__(self):
         return f"{self.user.username} reacted {self.emoji} on story {self.status_id}"
+
+
+class Call(models.Model):
+    """
+    Audio and video WebRTC call records, including 1-on-1 and group calls.
+    """
+    CALL_TYPE_CHOICES = [
+        ('audio', 'Audio Call'),
+        ('video', 'Video Call'),
+        ('group', 'Group Video Call'),
+    ]
+
+    STATUS_CHOICES = [
+        ('ringing', 'Ringing'),
+        ('active', 'In Progress'),
+        ('ended', 'Ended Normally'),
+        ('rejected', 'Call Declined'),
+        ('missed', 'Missed Call'),
+        ('busy', 'Line Busy'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    caller = models.ForeignKey(User, on_delete=models.CASCADE, related_name='initiated_calls')
+    conversation = models.ForeignKey(Conversation, on_delete=models.SET_NULL, null=True, blank=True, related_name='calls')
+    call_type = models.CharField(max_length=15, choices=CALL_TYPE_CHOICES, default='audio')
+    status = models.CharField(max_length=15, choices=STATUS_CHOICES, default='ringing')
+    room_id = models.CharField(max_length=64, unique=True, db_index=True)
+    
+    started_at = models.DateTimeField(default=timezone.now)
+    ended_at = models.DateTimeField(null=True, blank=True)
+    duration_seconds = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.call_type} call from {self.caller.username} ({self.status})"
+
+
+class CallParticipant(models.Model):
+    """
+    Participant state inside an active or concluded WebRTC call.
+    """
+    ROLE_CHOICES = [
+        ('caller', 'Caller'),
+        ('receiver', 'Receiver'),
+    ]
+
+    STATUS_CHOICES = [
+        ('invited', 'Invited'),
+        ('joined', 'Joined'),
+        ('declined', 'Declined'),
+        ('left', 'Left'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    call = models.ForeignKey(Call, on_delete=models.CASCADE, related_name='participants')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='call_participations')
+    role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='receiver')
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='invited')
+    
+    joined_at = models.DateTimeField(null=True, blank=True)
+    left_at = models.DateTimeField(null=True, blank=True)
+    is_muted = models.BooleanField(default=False)
+    is_camera_off = models.BooleanField(default=False)
+    is_screen_sharing = models.BooleanField(default=False)
+
+    class Meta:
+        unique_together = ('call', 'user')
+
+    def __str__(self):
+        return f"{self.user.username} in call {self.call_id}"
