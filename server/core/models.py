@@ -555,3 +555,56 @@ class CallParticipant(models.Model):
 
     def __str__(self):
         return f"{self.user.username} in call {self.call_id}"
+
+
+class Notification(models.Model):
+    """
+    In-app alerts and push notification records.
+    """
+    TYPE_CHOICES = [
+        ('message', 'New Message'),
+        ('call', 'Incoming Call'),
+        ('missed_call', 'Missed Call'),
+        ('reaction', 'Message Reaction'),
+        ('mention', 'Mentioned in Group'),
+        ('group_invite', 'Group Invitation'),
+        ('story_view', 'Story Viewed'),
+        ('system', 'System Alert'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
+    sender = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='sent_notifications')
+    notification_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='message')
+    title = models.CharField(max_length=200)
+    message = models.TextField()
+    conversation = models.ForeignKey(Conversation, on_delete=models.SET_NULL, null=True, blank=True, related_name='related_notifications')
+    metadata = models.JSONField(default=dict, blank=True)
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['recipient', 'is_read']),
+        ]
+
+    def __str__(self):
+        return f"Notification for {self.recipient.username}: {self.title}"
+
+
+class BlockedUser(models.Model):
+    """
+    Blocked accounts registry for safety and privacy.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    blocker = models.ForeignKey(User, on_delete=models.CASCADE, related_name='blocked_users')
+    blocked = models.ForeignKey(User, on_delete=models.CASCADE, related_name='blocked_by_users')
+    reason = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('blocker', 'blocked')
+
+    def __str__(self):
+        return f"{self.blocker.username} blocked {self.blocked.username}"
