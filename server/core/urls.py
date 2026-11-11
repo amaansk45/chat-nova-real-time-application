@@ -43,6 +43,11 @@ from .call_views import (
     InitiateCallAPIView, CallActionAPIView, CallHistoryAPIView,
     CallICEConfigAPIView
 )
+from .ai_views import (
+    AIChatAssistantAPIView, AISmartRepliesAPIView, AISummarizeAPIView,
+    AITranslateAPIView, AIWritingAssistantAPIView, AIVoiceTranscriptionAPIView,
+    AIConversationInsightsAPIView
+)
 
 urlpatterns = [
     # Authentication & Security
@@ -123,4 +128,13 @@ urlpatterns = [
     path('calls/<uuid:call_id>/action/', CallActionAPIView.as_view(), name='call_action'),
     path('calls/history/', CallHistoryAPIView.as_view(), name='call_history'),
     path('calls/ice-config/', CallICEConfigAPIView.as_view(), name='call_ice_config'),
+
+    # AI-Powered Communication Tools
+    path('ai/assistant/chat/', AIChatAssistantAPIView.as_view(), name='ai_chat_assistant'),
+    path('ai/smart-replies/', AISmartRepliesAPIView.as_view(), name='ai_smart_replies'),
+    path('ai/summarize/', AISummarizeAPIView.as_view(), name='ai_summarize'),
+    path('ai/translate/', AITranslateAPIView.as_view(), name='ai_translate'),
+    path('ai/writing-assistant/', AIWritingAssistantAPIView.as_view(), name='ai_writing_assistant'),
+    path('ai/transcribe/', AIVoiceTranscriptionAPIView.as_view(), name='ai_transcribe'),
+    path('conversations/<uuid:conv_id>/insights/', AIConversationInsightsAPIView.as_view(), name='ai_conversation_insights'),
 ]
