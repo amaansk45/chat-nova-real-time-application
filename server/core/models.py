@@ -255,3 +255,55 @@ class MessageReceipt(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.message_id} ({self.status})"
+
+
+class MessageReaction(models.Model):
+    """
+    Emoji reaction associated with a message.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    message = models.ForeignKey(Message, on_delete=models.CASCADE, related_name='reactions')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reactions')
+    emoji = models.CharField(max_length=16)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('message', 'user', 'emoji')
+        indexes = [models.Index(fields=['message', 'emoji'])]
+
+    def __str__(self):
+        return f"{self.user.username} reacted {self.emoji} on {self.message_id}"
+
+
+class Attachment(models.Model):
+    """
+    Media or document attachment linked to a chat message.
+    """
+    MEDIA_TYPE_CHOICES = [
+        ('image', 'Image'),
+        ('video', 'Video'),
+        ('audio', 'Audio'),
+        ('voice', 'Voice Note'),
+        ('document', 'Document'),
+        ('other', 'Other'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    message = models.ForeignKey(Message, on_delete=models.CASCADE, related_name='attachments')
+    file = models.FileField(upload_to='attachments/%Y/%m/%d/')
+    file_name = models.CharField(max_length=255)
+    file_size = models.BigIntegerField(default=0)
+    file_type = models.CharField(max_length=100)
+    media_type = models.CharField(max_length=20, choices=MEDIA_TYPE_CHOICES, default='other')
+    
+    thumbnail = models.ImageField(upload_to='thumbnails/%Y/%m/%d/', blank=True, null=True)
+    duration = models.FloatField(blank=True, null=True)
+    waveform_data = models.JSONField(default=list, blank=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"{self.file_name} ({self.media_type})"
