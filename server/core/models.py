@@ -399,3 +399,86 @@ class GroupPollVote(models.Model):
 
     def __str__(self):
         return f"{self.user.username} voted for {self.option.text}"
+
+
+def default_status_expiration():
+    return timezone.now() + timezone.timedelta(hours=24)
+
+class UserStatus(models.Model):
+    """
+    Stories / 24-hour disappearing status updates.
+    """
+    MEDIA_TYPE_CHOICES = [
+        ('text', 'Text Story'),
+        ('image', 'Photo Story'),
+        ('video', 'Video Story'),
+    ]
+
+    PRIVACY_CHOICES = [
+        ('everyone', 'All Contacts'),
+        ('contacts', 'My Contacts Except...'),
+        ('custom', 'Only Share With...'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='statuses')
+    media_type = models.CharField(max_length=10, choices=MEDIA_TYPE_CHOICES, default='text')
+    media_file = models.FileField(upload_to='stories/%Y/%m/%d/', blank=True, null=True)
+    
+    text_content = models.TextField(blank=True)
+    background_color = models.CharField(max_length=30, default='#080D19')
+    font_style = models.CharField(max_length=30, default='sans')
+    caption = models.CharField(max_length=255, blank=True)
+    
+    privacy = models.CharField(max_length=20, choices=PRIVACY_CHOICES, default='everyone')
+    allowed_viewers = models.ManyToManyField(User, related_name='visible_custom_statuses', blank=True)
+    excluded_viewers = models.ManyToManyField(User, related_name='hidden_from_statuses', blank=True)
+    
+    expires_at = models.DateTimeField(default=default_status_expiration, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'expires_at']),
+        ]
+
+    def is_active(self):
+        return timezone.now() < self.expires_at
+
+    def __str__(self):
+        return f"{self.user.username}'s Story ({self.media_type})"
+
+
+class StatusView(models.Model):
+    """
+    Tracking contacts who viewed a status story.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    status = models.ForeignKey(UserStatus, on_delete=models.CASCADE, related_name='views')
+    viewer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='status_views')
+    viewed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('status', 'viewer')
+        ordering = ['-viewed_at']
+
+    def __str__(self):
+        return f"{self.viewer.username} viewed {self.status.id}"
+
+
+class StatusReaction(models.Model):
+    """
+    Quick emoji reaction on a user's story.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    status = models.ForeignKey(UserStatus, on_delete=models.CASCADE, related_name='reactions')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='status_reactions')
+    emoji = models.CharField(max_length=16)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('status', 'user', 'emoji')
+
+    def __str__(self):
+        return f"{self.user.username} reacted {self.emoji} on story {self.status_id}"
