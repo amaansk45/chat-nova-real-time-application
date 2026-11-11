@@ -7,6 +7,13 @@ from .auth_views import (
     ActiveSessionsAPIView, RevokeSessionAPIView, DeleteAccountAPIView,
     AccountRecoveryAPIView, MeAPIView
 )
+from .social_views import (
+    UserProfileView, AvatarUploadView, CoverImageUploadView,
+    UserSearchAPIView, ContactListCreateAPIView, ContactDetailAPIView,
+    ContactSyncAPIView, FriendSuggestionsAPIView,
+    PersonalNoteListCreateAPIView, PersonalNoteDetailAPIView,
+    PresenceHeartbeatAPIView
+)
 
 urlpatterns = [
     # Authentication & Security
@@ -25,4 +32,18 @@ urlpatterns = [
     path('auth/account/delete/', DeleteAccountAPIView.as_view(), name='auth_delete_account'),
     path('auth/account/recover/', AccountRecoveryAPIView.as_view(), name='auth_recover_account'),
     path('auth/me/', MeAPIView.as_view(), name='auth_me'),
+
+    # Profile & Social
+    path('profile/', UserProfileView.as_view(), name='user_profile_me'),
+    path('profile/<uuid:user_id>/', UserProfileView.as_view(), name='user_profile_detail'),
+    path('profile/avatar/upload/', AvatarUploadView.as_view(), name='user_avatar_upload'),
+    path('profile/cover/upload/', CoverImageUploadView.as_view(), name='user_cover_upload'),
+    path('users/search/', UserSearchAPIView.as_view(), name='users_search'),
+    path('contacts/', ContactListCreateAPIView.as_view(), name='contacts_list_create'),
+    path('contacts/<uuid:contact_id>/', ContactDetailAPIView.as_view(), name='contact_detail'),
+    path('contacts/sync/', ContactSyncAPIView.as_view(), name='contacts_sync'),
+    path('friends/suggestions/', FriendSuggestionsAPIView.as_view(), name='friend_suggestions'),
+    path('notes/', PersonalNoteListCreateAPIView.as_view(), name='personal_notes_list_create'),
+    path('notes/<uuid:note_id>/', PersonalNoteDetailAPIView.as_view(), name='personal_note_detail'),
+    path('presence/heartbeat/', PresenceHeartbeatAPIView.as_view(), name='presence_heartbeat'),
 ]
