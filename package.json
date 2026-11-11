@@ -1,0 +1,22 @@
+{
+  "name": "chatnova",
+  "version": "1.0.0",
+  "description": "ChatNova – Next Generation Real-Time Messaging Application",
+  "scripts": {
+    "client": "npm --prefix client run dev",
+    "client:build": "npm --prefix client run build",
+    "server": "python server/manage.py runserver 8000",
+    "server:migrate": "python server/manage.py migrate",
+    "server:makemigrations": "python server/manage.py makemigrations"
+  },
+  "keywords": [
+    "chatnova",
+    "realtime-chat",
+    "django-channels",
+    "react",
+    "webrtc",
+    "websockets"
+  ],
+  "author": "Shaikh Amaan",
+  "license": "MIT"
+}
