@@ -608,3 +608,108 @@ class BlockedUser(models.Model):
 
     def __str__(self):
         return f"{self.blocker.username} blocked {self.blocked.username}"
+
+
+class Report(models.Model):
+    """
+    Abuse and inappropriate content reports for moderation.
+    """
+    REASON_CHOICES = [
+        ('spam', 'Spam / Advertising'),
+        ('harassment', 'Harassment or Bullying'),
+        ('inappropriate_content', 'Inappropriate / Explicit Content'),
+        ('impersonation', 'Impersonation'),
+        ('scam', 'Fraud or Scam'),
+        ('other', 'Other Reason'),
+    ]
+
+    STATUS_CHOICES = [
+        ('pending', 'Pending Review'),
+        ('reviewed', 'Reviewed'),
+        ('resolved', 'Action Taken / Resolved'),
+        ('dismissed', 'Dismissed'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    reporter = models.ForeignKey(User, on_delete=models.CASCADE, related_name='filed_reports')
+    reported_user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='reports_received')
+    reported_message = models.ForeignKey(Message, on_delete=models.SET_NULL, null=True, blank=True, related_name='reports')
+    reported_conversation = models.ForeignKey(Conversation, on_delete=models.SET_NULL, null=True, blank=True, related_name='reports')
+    
+    reason = models.CharField(max_length=30, choices=REASON_CHOICES, default='spam')
+    description = models.TextField(blank=True)
+    status = models.CharField(max_length=15, choices=STATUS_CHOICES, default='pending')
+    admin_notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Report {self.id} ({self.reason}) - {self.status}"
+
+
+class Device(models.Model):
+    """
+    Physical or browser client registered to a user account.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='devices')
+    device_id = models.CharField(max_length=128, db_index=True)
+    device_name = models.CharField(max_length=150)
+    device_type = models.CharField(max_length=50, default='desktop')
+    browser = models.CharField(max_length=100, blank=True)
+    os = models.CharField(max_length=100, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    last_active = models.DateTimeField(default=timezone.now)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'device_id')
+        ordering = ['-last_active']
+
+    def __str__(self):
+        return f"{self.user.username} - {self.device_name} ({self.device_type})"
+
+
+class UserSession(models.Model):
+    """
+    Active JWT / device session with remote revocation capability.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_sessions')
+    device = models.ForeignKey(Device, on_delete=models.CASCADE, null=True, blank=True, related_name='sessions')
+    session_token = models.CharField(max_length=255, unique=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+    expires_at = models.DateTimeField()
+    is_revoked = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Session {self.session_token[:8]} for {self.user.username}"
+
+
+class MessageEncryptionKey(models.Model):
+    """
+    Cryptographic public keys for End-to-End Encryption key agreement.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='encryption_keys')
+    device_id = models.CharField(max_length=128)
+    public_identity_key = models.TextField()
+    public_pre_key = models.TextField()
+    signed_pre_key = models.TextField()
+    signature = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('user', 'device_id')
+
+    def __str__(self):
+        return f"E2EE Key for {self.user.username} (Device: {self.device_id[:8]})"
