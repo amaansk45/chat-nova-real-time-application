@@ -28,15 +28,18 @@ class UserSummarySerializer(serializers.ModelSerializer):
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
-    password_confirm = serializers.CharField(write_only=True, required=True)
+    password_confirm = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    full_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
     phone_number = serializers.CharField(required=False, allow_blank=True)
 
     class Meta:
         model = User
-        fields = ['id', 'email', 'username', 'phone_number', 'password', 'password_confirm', 'first_name', 'last_name']
+        fields = ['id', 'email', 'username', 'phone_number', 'password', 'password_confirm', 'first_name', 'last_name', 'full_name']
 
     def validate(self, attrs):
-        if attrs['password'] != attrs['password_confirm']:
+        password = attrs.get('password')
+        confirm = attrs.get('password_confirm')
+        if confirm and password != confirm:
             raise serializers.ValidationError({"password": "Passwords do not match."})
         
         email = attrs.get('email', '').strip().lower()
@@ -50,7 +53,14 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
-        validated_data.pop('password_confirm')
+        validated_data.pop('password_confirm', None)
+        full_name = validated_data.pop('full_name', '').strip()
+        if full_name and not validated_data.get('first_name'):
+            parts = full_name.split(' ', 1)
+            validated_data['first_name'] = parts[0]
+            if len(parts) > 1:
+                validated_data['last_name'] = parts[1]
+
         password = validated_data.pop('password')
         email = validated_data.get('email', '').lower().strip()
         validated_data['email'] = email
