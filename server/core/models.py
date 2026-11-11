@@ -69,3 +69,40 @@ class UserProfile(models.Model):
 
     def __str__(self):
         return f"{self.user.username}'s Profile"
+
+
+class Contact(models.Model):
+    """
+    User contacts with nickname, favorite, and blocking indicators.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='contacts')
+    contact = models.ForeignKey(User, on_delete=models.CASCADE, related_name='contact_of')
+    nickname = models.CharField(max_length=100, blank=True)
+    is_favorite = models.BooleanField(default=False)
+    is_blocked = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'contact')
+        ordering = ['nickname', 'contact__username']
+
+    def __str__(self):
+        return f"{self.user.username} -> {self.contact.username}"
+
+
+class ContactSync(models.Model):
+    """
+    Hashed phonebook entries for contact synchronization.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='synced_contacts')
+    phone_hash = models.CharField(max_length=64, db_index=True)
+    contact_name = models.CharField(max_length=150)
+    synced_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [models.Index(fields=['user', 'phone_hash'])]
+
+    def __str__(self):
+        return f"{self.user.username}: {self.contact_name}"
