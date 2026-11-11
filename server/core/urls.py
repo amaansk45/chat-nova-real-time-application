@@ -23,6 +23,11 @@ from .chat_views import (
     ScheduledMessageDetailAPIView, MessageDraftAPIView,
     SearchMessagesAPIView
 )
+from .media_views import (
+    FileUploadAPIView, MediaGalleryAPIView,
+    ShareLocationAPIView, ShareContactAPIView,
+    FileDownloadAPIView
+)
 
 urlpatterns = [
     # Authentication & Security
@@ -70,4 +75,11 @@ urlpatterns = [
     path('messages/scheduled/', ScheduledMessageListCreateAPIView.as_view(), name='scheduled_messages_list_create'),
     path('messages/scheduled/<uuid:schedule_id>/', ScheduledMessageDetailAPIView.as_view(), name='scheduled_message_detail'),
     path('messages/search/', SearchMessagesAPIView.as_view(), name='messages_search'),
+
+    # Media, Files & Rich Sharing
+    path('conversations/<uuid:conv_id>/upload/', FileUploadAPIView.as_view(), name='media_upload'),
+    path('conversations/<uuid:conv_id>/gallery/', MediaGalleryAPIView.as_view(), name='media_gallery'),
+    path('conversations/<uuid:conv_id>/share/location/', ShareLocationAPIView.as_view(), name='share_location'),
+    path('conversations/<uuid:conv_id>/share/contact/', ShareContactAPIView.as_view(), name='share_contact'),
+    path('attachments/<uuid:attachment_id>/download/', FileDownloadAPIView.as_view(), name='file_download'),
 ]
