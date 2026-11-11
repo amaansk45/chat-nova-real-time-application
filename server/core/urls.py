@@ -39,6 +39,10 @@ from .status_views import (
     StatusFeedAPIView, CreateStatusAPIView, StatusDetailAPIView,
     RecordStatusViewAPIView, StatusReactionAPIView, ReplyToStatusAPIView
 )
+from .call_views import (
+    InitiateCallAPIView, CallActionAPIView, CallHistoryAPIView,
+    CallICEConfigAPIView
+)
 
 urlpatterns = [
     # Authentication & Security
@@ -113,4 +117,10 @@ urlpatterns = [
     path('status/<uuid:status_id>/view/', RecordStatusViewAPIView.as_view(), name='status_record_view'),
     path('status/<uuid:status_id>/react/', StatusReactionAPIView.as_view(), name='status_react'),
     path('status/<uuid:status_id>/reply/', ReplyToStatusAPIView.as_view(), name='status_reply'),
+
+    # Audio & Video WebRTC Calling
+    path('calls/initiate/', InitiateCallAPIView.as_view(), name='call_initiate'),
+    path('calls/<uuid:call_id>/action/', CallActionAPIView.as_view(), name='call_action'),
+    path('calls/history/', CallHistoryAPIView.as_view(), name='call_history'),
+    path('calls/ice-config/', CallICEConfigAPIView.as_view(), name='call_ice_config'),
 ]
