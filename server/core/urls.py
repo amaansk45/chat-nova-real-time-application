@@ -14,6 +14,15 @@ from .social_views import (
     PersonalNoteListCreateAPIView, PersonalNoteDetailAPIView,
     PresenceHeartbeatAPIView
 )
+from .chat_views import (
+    ConversationListCreateAPIView, ConversationDetailAPIView,
+    MessageListCreateAPIView, MessageDetailAPIView,
+    MessageReactionAPIView, MessageStarToggleAPIView,
+    StarredMessagesListAPIView, MessagePinToggleAPIView,
+    MessageForwardAPIView, ScheduledMessageListCreateAPIView,
+    ScheduledMessageDetailAPIView, MessageDraftAPIView,
+    SearchMessagesAPIView
+)
 
 urlpatterns = [
     # Authentication & Security
@@ -46,4 +55,19 @@ urlpatterns = [
     path('notes/', PersonalNoteListCreateAPIView.as_view(), name='personal_notes_list_create'),
     path('notes/<uuid:note_id>/', PersonalNoteDetailAPIView.as_view(), name='personal_note_detail'),
     path('presence/heartbeat/', PresenceHeartbeatAPIView.as_view(), name='presence_heartbeat'),
+
+    # Real-Time Core Messaging & Conversations
+    path('conversations/', ConversationListCreateAPIView.as_view(), name='conversations_list_create'),
+    path('conversations/<uuid:conv_id>/', ConversationDetailAPIView.as_view(), name='conversation_detail'),
+    path('conversations/<uuid:conv_id>/messages/', MessageListCreateAPIView.as_view(), name='messages_list_create'),
+    path('conversations/<uuid:conv_id>/draft/', MessageDraftAPIView.as_view(), name='conversation_draft'),
+    path('messages/<uuid:message_id>/', MessageDetailAPIView.as_view(), name='message_detail'),
+    path('messages/<uuid:message_id>/reaction/', MessageReactionAPIView.as_view(), name='message_reaction'),
+    path('messages/<uuid:message_id>/star/', MessageStarToggleAPIView.as_view(), name='message_star_toggle'),
+    path('messages/<uuid:message_id>/pin/', MessagePinToggleAPIView.as_view(), name='message_pin_toggle'),
+    path('messages/<uuid:message_id>/forward/', MessageForwardAPIView.as_view(), name='message_forward'),
+    path('messages/starred/', StarredMessagesListAPIView.as_view(), name='starred_messages_list'),
+    path('messages/scheduled/', ScheduledMessageListCreateAPIView.as_view(), name='scheduled_messages_list_create'),
+    path('messages/scheduled/<uuid:schedule_id>/', ScheduledMessageDetailAPIView.as_view(), name='scheduled_message_detail'),
+    path('messages/search/', SearchMessagesAPIView.as_view(), name='messages_search'),
 ]
