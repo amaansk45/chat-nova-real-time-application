@@ -307,3 +307,95 @@ class Attachment(models.Model):
 
     def __str__(self):
         return f"{self.file_name} ({self.media_type})"
+
+
+class Group(models.Model):
+    """
+    Extended group profile and permission control linked to Conversation.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    conversation = models.OneToOneField(Conversation, on_delete=models.CASCADE, related_name='group_details')
+    is_announcement_only = models.BooleanField(default=False)
+    only_admins_can_edit_info = models.BooleanField(default=True)
+    only_admins_can_invite = models.BooleanField(default=False)
+    
+    invite_link_token = models.CharField(max_length=64, unique=True, blank=True, null=True, db_index=True)
+    invite_link_expires_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Group {self.conversation.title}"
+
+
+class GroupAdmin(models.Model):
+    """
+    Granular permission assignments for group administrators.
+    """
+    ROLE_CHOICES = [
+        ('owner', 'Owner'),
+        ('admin', 'Admin'),
+        ('moderator', 'Moderator'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    group = models.ForeignKey(Group, on_delete=models.CASCADE, related_name='admins')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='administered_groups')
+    role = models.CharField(max_length=15, choices=ROLE_CHOICES, default='admin')
+    
+    can_change_info = models.BooleanField(default=True)
+    can_delete_messages = models.BooleanField(default=True)
+    can_ban_users = models.BooleanField(default=True)
+    can_invite_users = models.BooleanField(default=True)
+    can_pin_messages = models.BooleanField(default=True)
+    can_manage_admins = models.BooleanField(default=False)
+    assigned_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('group', 'user')
+
+    def __str__(self):
+        return f"{self.user.username} ({self.role}) in {self.group.conversation.title}"
+
+
+class GroupPoll(models.Model):
+    """
+    Interactive polling inside group conversations.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='polls')
+    creator = models.ForeignKey(User, on_delete=models.CASCADE, related_name='created_polls')
+    question = models.CharField(max_length=300)
+    is_multiple_choice = models.BooleanField(default=False)
+    is_closed = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.question
+
+
+class GroupPollOption(models.Model):
+    """
+    Option choices for a group poll.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    poll = models.ForeignKey(GroupPoll, on_delete=models.CASCADE, related_name='options')
+    text = models.CharField(max_length=200)
+
+    def __str__(self):
+        return self.text
+
+
+class GroupPollVote(models.Model):
+    """
+    User vote cast on a poll option.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    option = models.ForeignKey(GroupPollOption, on_delete=models.CASCADE, related_name='votes')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='poll_votes')
+    voted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('option', 'user')
+
+    def __str__(self):
+        return f"{self.user.username} voted for {self.option.text}"
