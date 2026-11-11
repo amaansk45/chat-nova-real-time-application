@@ -8,6 +8,7 @@ export interface AvatarProps {
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl';
   isOnline?: boolean;
   showOnlineStatus?: boolean;
+  status?: 'online' | 'offline' | string;
   className?: string;
 }
 
@@ -18,8 +19,11 @@ export const Avatar: React.FC<AvatarProps> = ({
   size = 'md',
   isOnline = false,
   showOnlineStatus = false,
+  status,
   className
 }) => {
+  const effectiveOnline = status === 'online' || isOnline;
+  const effectiveShowStatus = status !== undefined ? true : showOnlineStatus;
   const sizeStyles = {
     xs: 'w-6 h-6 text-[10px]',
     sm: 'w-8 h-8 text-xs',
@@ -70,11 +74,11 @@ export const Avatar: React.FC<AvatarProps> = ({
         </div>
       )}
 
-      {showOnlineStatus && (
+      {effectiveShowStatus && (
         <span
           className={clsx(
             "absolute bottom-0 right-0 rounded-full ring-nova-card",
-            isOnline ? "bg-nova-success" : "bg-slate-500",
+            effectiveOnline ? "bg-nova-success" : "bg-slate-500",
             dotSizeStyles[size]
           )}
         />
