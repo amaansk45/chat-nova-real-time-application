@@ -27,6 +27,11 @@ import ScheduledMessagesModal from '../../components/chat/ScheduledMessagesModal
 import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
+import { useChatSocket } from '../../hooks/useChatSocket';
+import { WebRTCManager } from '../../utils/webrtc';
+import { ReconnectingWebSocket } from '../../utils/websocket';
+import ActiveCallScreen from '../../components/calls/ActiveCallScreen';
+import IncomingCallModal from '../../components/calls/IncomingCallModal';
 
 export const ChatDashboardPage: React.FC = () => {
   const { user } = useAuth();
@@ -36,6 +41,25 @@ export const ChatDashboardPage: React.FC = () => {
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
+
+  // Calling state
+  const [activeCall, setActiveCall] = useState<{
+    callId: string;
+    roomId: string;
+    callType: 'audio' | 'video';
+    partner: { id: string; username: string; avatar_url?: string | null };
+  } | null>(null);
+
+  const [incomingCall, setIncomingCall] = useState<{
+    callId: string;
+    roomId: string;
+    callType: 'audio' | 'video';
+    caller: { id: string; username: string; avatar_url?: string | null };
+  } | null>(null);
+
+  const [isPartnerTyping, setIsPartnerTyping] = useState(false);
+  const webrtcManagerRef = useRef<WebRTCManager | null>(null);
+  const callSocketRef = useRef<ReconnectingWebSocket | null>(null);
 
   // In-chat search
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -73,6 +97,295 @@ export const ChatDashboardPage: React.FC = () => {
     loadConversations();
   }, []);
 
+  // WebRTC Call Signaling and Cleanup
+  const handleEndCall = async () => {
+    if (activeCall) {
+      try {
+        await api.post(`/api/calls/${activeCall.callId}/action/`, {
+          action: 'end',
+          duration_seconds: 0,
+        });
+      } catch (e) {}
+    }
+    if (callSocketRef.current) {
+      try {
+        callSocketRef.current.send({ type: 'call_end', payload: {} });
+        callSocketRef.current.close();
+      } catch (e) {}
+      callSocketRef.current = null;
+    }
+    if (webrtcManagerRef.current) {
+      try {
+        webrtcManagerRef.current.hangup();
+      } catch (e) {}
+      webrtcManagerRef.current = null;
+    }
+    setActiveCall(null);
+    setIncomingCall(null);
+  };
+
+  const setupCallSignaling = async (callId: string, roomId: string, type: 'audio' | 'video', isCaller: boolean) => {
+    if (callSocketRef.current) {
+      callSocketRef.current.close();
+      callSocketRef.current = null;
+    }
+
+    const token = localStorage.getItem('chatnova_access_token') || '';
+    const signalingSocket = new ReconnectingWebSocket(`/ws/calls/${roomId}/`, token);
+    callSocketRef.current = signalingSocket;
+
+    const manager = new WebRTCManager({
+      onIceCandidate: (candidate) => {
+        signalingSocket.send({
+          type: 'ice_candidate',
+          payload: candidate,
+        });
+      },
+      onConnectionStateChange: (state) => {
+        if (state === 'failed' || state === 'disconnected') {
+          handleEndCall();
+        }
+      },
+    });
+    webrtcManagerRef.current = manager;
+
+    await manager.initConnection();
+    try {
+      await manager.startLocalStream(type === 'video');
+    } catch (streamErr) {
+      console.warn('Microphone/Camera permission required for calls', streamErr);
+    }
+
+    signalingSocket.on('offer', async (data: any) => {
+      if (!isCaller && webrtcManagerRef.current) {
+        try {
+          const answer = await webrtcManagerRef.current.handleOffer(data.payload);
+          signalingSocket.send({
+            type: 'answer',
+            payload: answer,
+          });
+        } catch (err) {
+          console.error('Error handling WebRTC offer', err);
+        }
+      }
+    });
+
+    signalingSocket.on('answer', async (data: any) => {
+      if (isCaller && webrtcManagerRef.current) {
+        try {
+          await webrtcManagerRef.current.handleAnswer(data.payload);
+        } catch (err) {
+          console.error('Error handling WebRTC answer', err);
+        }
+      }
+    });
+
+    signalingSocket.on('ice_candidate', async (data: any) => {
+      if (webrtcManagerRef.current && data.payload) {
+        try {
+          await webrtcManagerRef.current.addIceCandidate(data.payload);
+        } catch (err) {
+          console.error('Error adding ICE candidate', err);
+        }
+      }
+    });
+
+    signalingSocket.on('call_reject', () => {
+      handleEndCall();
+      showToast('Call was declined.', 'info');
+    });
+
+    signalingSocket.on('call_end', () => {
+      handleEndCall();
+      showToast('Call ended.', 'info');
+    });
+
+    signalingSocket.on('peer_disconnected', () => {
+      handleEndCall();
+      showToast('Partner disconnected.', 'info');
+    });
+
+    signalingSocket.on('_open', async () => {
+      if (isCaller) {
+        try {
+          const offer = await manager.createOffer();
+          signalingSocket.send({
+            type: 'offer',
+            payload: offer,
+          });
+        } catch (e) {
+          console.error('Error creating WebRTC offer', e);
+        }
+      }
+    });
+
+    signalingSocket.connect();
+  };
+
+  const handleStartCall = async (type: 'audio' | 'video') => {
+    if (!activeConversation) return;
+    const partner = activeConversation.other_participant;
+    if (!partner) {
+      showToast('Partner not available for calling.', 'error');
+      return;
+    }
+
+    sounds.playSent();
+    try {
+      const res = await api.post('/api/calls/initiate/', {
+        conversation_id: activeConversation.id,
+        recipient_id: partner.id,
+        call_type: type,
+      });
+
+      const callData = res.data;
+      const roomId = callData.room_id;
+      const callId = callData.id;
+
+      setActiveCall({
+        callId,
+        roomId,
+        callType: type,
+        partner: {
+          id: partner.id,
+          username: partner.username,
+          avatar_url: partner.avatar_url,
+        },
+      });
+
+      await setupCallSignaling(callId, roomId, type, true);
+    } catch (err: any) {
+      showToast(err.response?.data?.detail || 'Failed to initiate call.', 'error');
+    }
+  };
+
+  const handleAcceptIncomingCall = async () => {
+    if (!incomingCall) return;
+    try {
+      await api.post(`/api/calls/${incomingCall.callId}/action/`, { action: 'accept' });
+      const currentCall = incomingCall;
+      setIncomingCall(null);
+      setActiveCall({
+        callId: currentCall.callId,
+        roomId: currentCall.roomId,
+        callType: currentCall.callType,
+        partner: currentCall.caller,
+      });
+      await setupCallSignaling(currentCall.callId, currentCall.roomId, currentCall.callType, false);
+    } catch (err) {
+      showToast('Failed to accept call.', 'error');
+      setIncomingCall(null);
+    }
+  };
+
+  const handleRejectIncomingCall = async () => {
+    if (!incomingCall) return;
+    try {
+      await api.post(`/api/calls/${incomingCall.callId}/action/`, { action: 'reject' });
+    } catch (err) {}
+    setIncomingCall(null);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (callSocketRef.current) {
+        callSocketRef.current.close();
+        callSocketRef.current = null;
+      }
+      if (webrtcManagerRef.current) {
+        webrtcManagerRef.current.hangup();
+        webrtcManagerRef.current = null;
+      }
+    };
+  }, []);
+
+  // Real-time Chat WebSocket Connection
+  const { sendTyping, sendReadReceipt, sendMarkAllRead } = useChatSocket({
+    conversationId: selectedConversationId,
+    currentUserId: user?.id,
+    onNewMessage: (newMsg) => {
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === newMsg.id)) return prev;
+        return [...prev, newMsg];
+      });
+      if (newMsg.sender?.id !== user?.id) {
+        sendReadReceipt(newMsg.id);
+      }
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === (newMsg.conversation_id || selectedConversationId)
+            ? {
+                ...c,
+                last_message: {
+                  id: newMsg.id,
+                  content: newMsg.content,
+                  message_type: newMsg.message_type,
+                  sender_username: newMsg.sender?.username || 'User',
+                  created_at: newMsg.created_at,
+                },
+                updated_at: newMsg.created_at,
+              }
+            : c
+        )
+      );
+    },
+    onTypingStatus: (_username, isTyping) => {
+      setIsPartnerTyping(isTyping);
+    },
+    onReadReceipt: (messageId, readerId) => {
+      if (readerId !== user?.id) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === messageId || (!messageId && m.sender?.id === user?.id)
+              ? { ...m, delivery_status: 'read' }
+              : m
+          )
+        );
+      }
+    },
+    onAllMessagesRead: (readerId) => {
+      if (readerId !== user?.id) {
+        setMessages((prev) =>
+          prev.map((m) => (m.sender?.id === user?.id ? { ...m, delivery_status: 'read' } : m))
+        );
+      }
+    },
+    onReactionUpdated: (messageId, reactions) => {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === messageId ? { ...m, reactions } : m))
+      );
+    },
+    onMessageEdited: (editedMsg) => {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === editedMsg.id ? editedMsg : m))
+      );
+    },
+    onMessageDeleted: (deletedId) => {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === deletedId
+            ? { ...m, is_deleted_for_everyone: true, content: 'This message was deleted' }
+            : m
+        )
+      );
+    },
+    onIncomingCall: (callData) => {
+      if (callData.caller?.id !== user?.id) {
+        setIncomingCall({
+          callId: callData.call_id,
+          roomId: callData.room_id,
+          callType: callData.call_type || 'audio',
+          caller: callData.caller,
+        });
+      }
+    },
+    onCallStatus: (statusData) => {
+      if (statusData.action === 'reject' || statusData.action === 'end') {
+        handleEndCall();
+      }
+    },
+  });
+
   // Load messages when active conversation changes
   useEffect(() => {
     if (selectedConversationId) {
@@ -105,6 +418,7 @@ export const ChatDashboardPage: React.FC = () => {
     try {
       const res = await api.get(`/api/chat/conversations/${convId}/messages/`);
       setMessages(res.data.results || res.data || []);
+      sendMarkAllRead();
     } catch (err) {
       showToast('Failed to load messages.', 'error');
     } finally {
@@ -378,8 +692,9 @@ export const ChatDashboardPage: React.FC = () => {
           {/* Header */}
           <ChatWindowHeader
             conversation={activeConversation}
-            onVoiceCall={() => sounds.playRingtone()}
-            onVideoCall={() => sounds.playRingtone()}
+            isTyping={isPartnerTyping}
+            onVoiceCall={() => handleStartCall('audio')}
+            onVideoCall={() => handleStartCall('video')}
             onToggleSearch={() => setIsSearchOpen(!isSearchOpen)}
             onToggleInfo={() => setShowRightPane(!showRightPane)}
             onToggleMute={handleToggleMute}
@@ -457,6 +772,7 @@ export const ChatDashboardPage: React.FC = () => {
           {/* Input Component */}
           <ChatInput
             onSendMessage={handleSendMessage}
+            onTyping={(typing) => sendTyping(typing)}
             replyToMessage={replyToMessage}
             onCancelReply={() => setReplyToMessage(null)}
             editingMessage={editingMessage}
@@ -572,6 +888,27 @@ export const ChatDashboardPage: React.FC = () => {
             </button>
           </div>
         </div>
+      )}
+      {/* Incoming Call Dialog */}
+      {incomingCall && (
+        <IncomingCallModal
+          isOpen={true}
+          caller={incomingCall.caller}
+          callType={incomingCall.callType}
+          onAccept={handleAcceptIncomingCall}
+          onReject={handleRejectIncomingCall}
+        />
+      )}
+
+      {/* Active Call Fullscreen Overlay */}
+      {activeCall && webrtcManagerRef.current && (
+        <ActiveCallScreen
+          callId={activeCall.callId}
+          partner={activeCall.partner}
+          callType={activeCall.callType}
+          webrtcManager={webrtcManagerRef.current}
+          onEndCall={handleEndCall}
+        />
       )}
     </ChatLayout>
   );
