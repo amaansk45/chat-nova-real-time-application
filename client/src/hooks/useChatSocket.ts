@@ -9,10 +9,13 @@ interface UseChatSocketOptions {
   onNewMessage?: (message: Message) => void;
   onTypingStatus?: (username: string, isTyping: boolean) => void;
   onReadReceipt?: (messageId: string, userId: string) => void;
+  onAllMessagesRead?: (userId: string) => void;
   onReactionUpdated?: (messageId: string, reactions: MessageReaction[]) => void;
   onMessageEdited?: (message: Message) => void;
   onMessageDeleted?: (messageId: string) => void;
   onUserPresence?: (userId: string, isOnline: boolean) => void;
+  onIncomingCall?: (callData: any) => void;
+  onCallStatus?: (statusData: any) => void;
 }
 
 export const useChatSocket = ({
@@ -21,10 +24,13 @@ export const useChatSocket = ({
   onNewMessage,
   onTypingStatus,
   onReadReceipt,
+  onAllMessagesRead,
   onReactionUpdated,
   onMessageEdited,
   onMessageDeleted,
   onUserPresence,
+  onIncomingCall,
+  onCallStatus,
 }: UseChatSocketOptions) => {
   const [isConnected, setIsConnected] = useState(false);
   const socketRef = useRef<ReconnectingWebSocket | null>(null);
@@ -65,6 +71,27 @@ export const useChatSocket = ({
 
     socket.on('message_read', (data: { message_id: string; user_id: string }) => {
       onReadReceipt?.(data.message_id, data.user_id);
+    });
+
+    socket.on('all_messages_read', (data: { user_id: string }) => {
+      onAllMessagesRead?.(data.user_id);
+    });
+
+    socket.on('incoming_call', (data: any) => {
+      sounds.playRingtone();
+      onIncomingCall?.(data);
+    });
+
+    socket.on('call_status', (data: any) => {
+      onCallStatus?.(data);
+    });
+
+    socket.on('call_reject', (data: any) => {
+      onCallStatus?.({ action: 'reject', ...data });
+    });
+
+    socket.on('call_end', (data: any) => {
+      onCallStatus?.({ action: 'end', ...data });
     });
 
     socket.on('reaction_updated', (data: { message_id: string; reactions: MessageReaction[] }) => {
@@ -108,8 +135,25 @@ export const useChatSocket = ({
 
   const sendReadReceipt = useCallback((messageId: string) => {
     socketRef.current?.send({
+      action: 'read_receipt',
       type: 'read_receipt',
       message_id: messageId,
+    });
+  }, []);
+
+  const sendMarkAllRead = useCallback(() => {
+    socketRef.current?.send({
+      action: 'mark_all_read',
+      type: 'mark_all_read',
+    });
+  }, []);
+
+  const sendCallSignal = useCallback((signalType: string, payload: any) => {
+    socketRef.current?.send({
+      action: 'call_signal',
+      type: 'call_signal',
+      signal_type: signalType,
+      payload,
     });
   }, []);
 
@@ -141,6 +185,8 @@ export const useChatSocket = ({
     sendMessage,
     sendTyping,
     sendReadReceipt,
+    sendMarkAllRead,
+    sendCallSignal,
     sendReaction,
     sendEditMessage,
     sendDeleteMessage,
