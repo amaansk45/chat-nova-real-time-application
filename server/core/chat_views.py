@@ -13,10 +13,54 @@ from .models import (
 from .chat_serializers import (
     ConversationListSerializer, ConversationDetailSerializer,
     MessageSerializer, SendMessageSerializer, ScheduledMessageSerializer,
-    MessageDraftSerializer
+    MessageDraftSerializer, MessageReactionSerializer
 )
 
 channel_layer = get_channel_layer()
+
+def find_recipient(identifier, current_user):
+    """Smart lookup for users by username, email, email prefix, phone, name, or UUID."""
+    if not identifier:
+        return None
+    raw = str(identifier).strip()
+    
+    # 1. Exact match by username, email, or phone
+    recipient = User.objects.filter(
+        Q(username__iexact=raw) |
+        Q(email__iexact=raw) |
+        Q(phone_number__iexact=raw)
+    ).first()
+
+    # 2. Match email prefix (e.g. "hasan" matches "hasan@gmail.com")
+    if not recipient:
+        recipient = User.objects.filter(
+            Q(email__istartswith=f"{raw}@") |
+            Q(email__icontains=raw)
+        ).first()
+
+    # 3. Match by first_name or last_name
+    if not recipient:
+        recipient = User.objects.filter(
+            Q(first_name__iexact=raw) |
+            Q(last_name__iexact=raw)
+        ).first()
+
+    # 4. Partial substring match
+    if not recipient:
+        recipient = User.objects.filter(
+            Q(username__icontains=raw) |
+            Q(first_name__icontains=raw)
+        ).exclude(id=current_user.id).first()
+
+    # 5. UUID match
+    if not recipient:
+        try:
+            recipient = User.objects.filter(id=raw).first()
+        except Exception:
+            pass
+
+    return recipient
+
 
 class ConversationListCreateAPIView(APIView):
     """List user conversations by filter tab or initialize 1-on-1 direct chat."""
@@ -58,13 +102,18 @@ class ConversationListCreateAPIView(APIView):
         return Response(serializer.data)
 
     def post(self, request):
-        recipient_id = request.data.get('recipient_id')
-        if not recipient_id:
-            return Response({'detail': 'recipient_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        ident = (
+            request.data.get('recipient_id') or
+            request.data.get('username_or_email') or
+            request.data.get('identifier') or
+            request.data.get('username') or ''
+        )
+        if not ident:
+            return Response({'detail': 'Please provide a recipient username or email.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        recipient = User.objects.filter(id=recipient_id).first()
+        recipient = find_recipient(ident, request.user)
         if not recipient:
-            return Response({'detail': 'Recipient not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'detail': f'User "{ident}" not found. Please check the username or email.'}, status=status.HTTP_404_NOT_FOUND)
 
         if recipient.id == request.user.id:
             return Response({'detail': 'You cannot initiate a direct chat with yourself.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -88,6 +137,66 @@ class ConversationListCreateAPIView(APIView):
 
         serializer = ConversationListSerializer(conv, context={'request': request})
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class DirectConversationAPIView(APIView):
+    """Initialize or retrieve a 1-on-1 direct conversation."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        return ConversationListCreateAPIView().post(request)
+
+
+class ConversationMuteToggleAPIView(APIView):
+    """Toggle mute notifications for a conversation."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, conv_id):
+        membership = ConversationMember.objects.filter(conversation_id=conv_id, user=request.user).first()
+        if not membership:
+            return Response({'detail': 'Conversation not found.'}, status=status.HTTP_404_NOT_FOUND)
+        membership.is_muted = not membership.is_muted
+        membership.save(update_fields=['is_muted'])
+        return Response({'is_muted': membership.is_muted})
+
+
+class ConversationPinToggleAPIView(APIView):
+    """Toggle pinned status for a conversation."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, conv_id):
+        membership = ConversationMember.objects.filter(conversation_id=conv_id, user=request.user).first()
+        if not membership:
+            return Response({'detail': 'Conversation not found.'}, status=status.HTTP_404_NOT_FOUND)
+        membership.is_pinned = not membership.is_pinned
+        membership.save(update_fields=['is_pinned'])
+        return Response({'is_pinned': membership.is_pinned})
+
+
+class ConversationArchiveToggleAPIView(APIView):
+    """Toggle archived status for a conversation."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, conv_id):
+        membership = ConversationMember.objects.filter(conversation_id=conv_id, user=request.user).first()
+        if not membership:
+            return Response({'detail': 'Conversation not found.'}, status=status.HTTP_404_NOT_FOUND)
+        membership.is_archived = not membership.is_archived
+        membership.save(update_fields=['is_archived'])
+        return Response({'is_archived': membership.is_archived})
+
+
+class ConversationClearAPIView(APIView):
+    """Clear chat messages history for the current user."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, conv_id):
+        conv = Conversation.objects.filter(id=conv_id, members__user=request.user).first()
+        if not conv:
+            return Response({'detail': 'Conversation not found.'}, status=status.HTTP_404_NOT_FOUND)
+        for msg in conv.messages.all():
+            msg.deleted_for_users.add(request.user)
+        return Response({'detail': 'Chat history cleared successfully.'})
 
 
 class ConversationDetailAPIView(APIView):
@@ -193,9 +302,13 @@ class MessageListCreateAPIView(APIView):
         serializer = MessageSerializer(messages, many=True, context={'request': request})
         return Response(serializer.data)
 
-    def post(self, request, conv_id):
+    def post(self, request, conv_id=None):
         user = request.user
-        conv = Conversation.objects.filter(id=conv_id, members__user=user).first()
+        cid = conv_id or request.data.get('conversation_id')
+        if not cid:
+            return Response({'detail': 'conversation_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        conv = Conversation.objects.filter(id=cid, members__user=user).first()
         if not conv:
             return Response({'detail': 'Conversation not found.'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -220,15 +333,30 @@ class MessageListCreateAPIView(APIView):
             )
 
             # Handle file attachments if sent via multipart/form-data
+            uploaded_files = request.FILES.getlist('files')
             if 'attachment' in request.FILES:
-                file_obj = request.FILES['attachment']
+                uploaded_files.append(request.FILES['attachment'])
+            if 'file' in request.FILES:
+                uploaded_files.append(request.FILES['file'])
+
+            for file_obj in uploaded_files:
                 media_type = request.data.get('media_type', 'other')
+                if hasattr(file_obj, 'content_type'):
+                    ct = file_obj.content_type.lower()
+                    if 'image' in ct:
+                        media_type = 'image'
+                    elif 'video' in ct:
+                        media_type = 'video'
+                    elif 'audio' in ct:
+                        media_type = 'audio'
+                    elif 'pdf' in ct or 'document' in ct or 'word' in ct:
+                        media_type = 'document'
                 Attachment.objects.create(
                     message=msg,
                     file=file_obj,
                     file_name=file_obj.name,
                     file_size=file_obj.size,
-                    file_type=file_obj.content_type,
+                    file_type=getattr(file_obj, 'content_type', 'application/octet-stream'),
                     media_type=media_type,
                 )
 
@@ -325,6 +453,36 @@ class MessageDetailAPIView(APIView):
         return Response({'message': 'Message deleted successfully.'})
 
 
+class MessageDeleteForEveryoneAPIView(APIView):
+    """Delete a message for everyone in the conversation."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, message_id):
+        msg = Message.objects.filter(id=message_id, sender=request.user).first()
+        if not msg:
+            return Response({'detail': 'Message not found or not authorized.'}, status=status.HTTP_404_NOT_FOUND)
+
+        msg.is_deleted_for_everyone = True
+        msg.content = "This message was deleted"
+        msg.save(update_fields=['is_deleted_for_everyone', 'content'])
+
+        try:
+            if channel_layer:
+                async_to_sync(channel_layer.group_send)(
+                    f"chat_{msg.conversation_id}",
+                    {
+                        'type': 'message_deleted_event',
+                        'message_id': str(msg.id),
+                        'for_everyone': True,
+                        'user_id': str(request.user.id),
+                    }
+                )
+        except Exception:
+            pass
+
+        return Response({'message': 'Message deleted for everyone.', 'is_deleted_for_everyone': True})
+
+
 class MessageReactionAPIView(APIView):
     """Add or remove emoji reaction."""
     permission_classes = [permissions.IsAuthenticated]
@@ -341,12 +499,20 @@ class MessageReactionAPIView(APIView):
         reaction, created = MessageReaction.objects.get_or_create(
             message=msg, user=request.user, emoji=emoji
         )
-        return Response({'status': 'added' if created else 'already_exists'})
+        reactions = MessageReaction.objects.filter(message=msg).select_related('user', 'user__profile')
+        return Response({
+            'status': 'added' if created else 'already_exists',
+            'reactions': MessageReactionSerializer(reactions, many=True, context={'request': request}).data
+        })
 
     def delete(self, request, message_id):
         emoji = request.data.get('emoji', '').strip()
         MessageReaction.objects.filter(message_id=message_id, user=request.user, emoji=emoji).delete()
-        return Response({'status': 'removed'})
+        reactions = MessageReaction.objects.filter(message_id=message_id).select_related('user', 'user__profile')
+        return Response({
+            'status': 'removed',
+            'reactions': MessageReactionSerializer(reactions, many=True, context={'request': request}).data
+        })
 
 
 class MessageStarToggleAPIView(APIView):
