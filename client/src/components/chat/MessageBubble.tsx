@@ -49,21 +49,21 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
     if (status === 'read') {
       return (
-        <span title="Read">
-          <CheckCheck className="w-3.5 h-3.5 text-nova-accent inline ml-1" />
+        <span title="Read / Seen" className="inline-flex items-center ml-1">
+          <CheckCheck className="w-3.5 h-3.5 text-sky-400 font-bold" strokeWidth={2.8} />
         </span>
       );
     }
     if (status === 'delivered') {
       return (
-        <span title="Delivered">
-          <CheckCheck className="w-3.5 h-3.5 text-slate-400 inline ml-1" />
+        <span title="Delivered" className="inline-flex items-center ml-1">
+          <CheckCheck className="w-3.5 h-3.5 text-slate-300" strokeWidth={2} />
         </span>
       );
     }
     return (
-      <span title="Sent">
-        <Check className="w-3.5 h-3.5 text-slate-400 inline ml-1" />
+      <span title="Sent" className="inline-flex items-center ml-1">
+        <Check className="w-3.5 h-3.5 text-slate-300" strokeWidth={2} />
       </span>
     );
   };
