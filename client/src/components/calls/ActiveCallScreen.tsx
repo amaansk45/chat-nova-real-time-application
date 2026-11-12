@@ -38,7 +38,29 @@ export const ActiveCallScreen: React.FC<ActiveCallScreenProps> = ({
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Attach WebRTC streams
+  useEffect(() => {
+    const updateStreams = () => {
+      const local = webrtcManager.getLocalStream();
+      const remote = webrtcManager.getRemoteStream();
+      if (localVideoRef.current && local && localVideoRef.current.srcObject !== local) {
+        localVideoRef.current.srcObject = local;
+      }
+      if (remoteVideoRef.current && remote && remoteVideoRef.current.srcObject !== remote) {
+        remoteVideoRef.current.srcObject = remote;
+      }
+      if (remoteAudioRef.current && remote && remoteAudioRef.current.srcObject !== remote) {
+        remoteAudioRef.current.srcObject = remote;
+      }
+    };
+
+    updateStreams();
+    const interval = setInterval(updateStreams, 1000);
+    return () => clearInterval(interval);
+  }, [webrtcManager]);
 
   // Call timer
   useEffect(() => {
@@ -114,6 +136,9 @@ export const ActiveCallScreen: React.FC<ActiveCallScreenProps> = ({
           {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
         </button>
       </div>
+
+      {/* Hidden remote audio receiver for voice calls */}
+      <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
 
       {/* Main View Area */}
       <div className="flex-1 relative flex items-center justify-center my-4 overflow-hidden rounded-3xl bg-nova-card/30 border border-nova-border/30">

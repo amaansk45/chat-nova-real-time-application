@@ -18,6 +18,7 @@ import Avatar from '../ui/Avatar';
 
 interface ChatWindowHeaderProps {
   conversation: Conversation;
+  isTyping?: boolean;
   onBackMobile?: () => void;
   onVoiceCall: () => void;
   onVideoCall: () => void;
@@ -32,6 +33,7 @@ interface ChatWindowHeaderProps {
 
 export const ChatWindowHeader: React.FC<ChatWindowHeaderProps> = ({
   conversation,
+  isTyping,
   onBackMobile,
   onVoiceCall,
   onVideoCall,
@@ -57,6 +59,14 @@ export const ChatWindowHeader: React.FC<ChatWindowHeaderProps> = ({
   }, []);
 
   const renderStatus = () => {
+    if (isTyping) {
+      return (
+        <span className="text-xs text-nova-accent font-medium animate-pulse flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-nova-accent animate-ping" />
+          typing...
+        </span>
+      );
+    }
     if (conversation.type === 'group') {
       const count = conversation.members?.length || 0;
       return <span className="text-xs text-nova-muted">{count > 0 ? `${count} members` : 'Group'}</span>;
