@@ -9,6 +9,7 @@ from .social_serializers import (
     AddContactByIdentifierSerializer, ContactSyncSerializer,
     PersonalNoteSerializer, UserSearchSerializer
 )
+from .chat_views import find_recipient
 
 class UserProfileView(APIView):
     """Retrieve or update profile and privacy preferences."""
@@ -113,16 +114,14 @@ class ContactListCreateAPIView(APIView):
     def post(self, request):
         # Support either contact_id or identifier (username/email/phone)
         contact_id = request.data.get('contact_id')
-        identifier = request.data.get('identifier')
+        identifier = request.data.get('identifier') or request.data.get('username') or request.data.get('email')
         nickname = request.data.get('nickname', '').strip()
         
         target_user = None
         if contact_id:
             target_user = User.objects.filter(id=contact_id).first()
         elif identifier:
-            target_user = User.objects.filter(
-                Q(email__iexact=identifier) | Q(username__iexact=identifier) | Q(phone_number=identifier)
-            ).first()
+            target_user = find_recipient(identifier, request.user)
             
         if not target_user:
             return Response({'detail': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)

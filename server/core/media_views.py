@@ -91,39 +91,36 @@ class FileUploadAPIView(APIView):
 
 
 class MediaGalleryAPIView(APIView):
-    """Retrieve shared media, documents, audio, and links for a conversation."""
+    """Retrieve shared media, documents, audio, and links for a conversation or globally."""
     permission_classes = [permissions.IsAuthenticated]
 
-    def get(self, request, conv_id):
-        conv = Conversation.objects.filter(id=conv_id, members__user=request.user).first()
-        if not conv:
-            return Response({'detail': 'Conversation not found.'}, status=status.HTTP_404_NOT_FOUND)
+    def get(self, request, conv_id=None):
+        if conv_id:
+            conv = Conversation.objects.filter(id=conv_id, members__user=request.user).first()
+            if not conv:
+                return Response({'detail': 'Conversation not found.'}, status=status.HTTP_404_NOT_FOUND)
+            attachments_qs = Attachment.objects.filter(message__conversation=conv)
+            messages_qs = conv.messages
+        else:
+            attachments_qs = Attachment.objects.filter(message__conversation__members__user=request.user)
+            messages_qs = Message.objects.filter(conversation__members__user=request.user)
 
-        category = request.query_params.get('category', 'media') # 'media', 'documents', 'audio', 'links'
+        category = request.query_params.get('tab') or request.query_params.get('category', 'all')
 
-        if category == 'media':
-            attachments = Attachment.objects.filter(
-                message__conversation=conv,
-                media_type__in=['image', 'video']
-            ).order_by('-created_at')[:50]
+        if category in ['media', 'photos', 'videos']:
+            attachments = attachments_qs.filter(media_type__in=['image', 'video']).order_by('-created_at')[:100]
             return Response(AttachmentSerializer(attachments, many=True).data)
 
-        elif category == 'documents':
-            attachments = Attachment.objects.filter(
-                message__conversation=conv,
-                media_type='document'
-            ).order_by('-created_at')[:50]
+        elif category in ['documents', 'docs']:
+            attachments = attachments_qs.filter(media_type='document').order_by('-created_at')[:100]
             return Response(AttachmentSerializer(attachments, many=True).data)
 
-        elif category == 'audio':
-            attachments = Attachment.objects.filter(
-                message__conversation=conv,
-                media_type__in=['audio', 'voice']
-            ).order_by('-created_at')[:50]
+        elif category in ['audio', 'voice']:
+            attachments = attachments_qs.filter(media_type__in=['audio', 'voice']).order_by('-created_at')[:100]
             return Response(AttachmentSerializer(attachments, many=True).data)
 
         elif category == 'links':
-            messages = conv.messages.filter(content__icontains='http').order_by('-created_at')[:100]
+            messages = messages_qs.filter(content__icontains='http').order_by('-created_at')[:100]
             links = []
             for m in messages:
                 extracted = extract_urls_from_text(m.content)
@@ -136,7 +133,8 @@ class MediaGalleryAPIView(APIView):
                     })
             return Response(links[:50])
 
-        return Response({'detail': "Invalid category. Choose 'media', 'documents', 'audio', or 'links'."}, status=status.HTTP_400_BAD_REQUEST)
+        attachments = attachments_qs.order_by('-created_at')[:100]
+        return Response(AttachmentSerializer(attachments, many=True).data)
 
 
 class ShareLocationAPIView(APIView):
