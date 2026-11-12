@@ -12,9 +12,12 @@ export class ReconnectingWebSocket {
 
   constructor(path: string, token?: string) {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.hostname === 'localhost' ? 'localhost:8000' : window.location.host;
+    let host = window.location.host;
+    if (window.location.port === '3000') {
+      host = `${window.location.hostname}:8000`;
+    }
     const cleanPath = path.startsWith('/') ? path : `/${path}`;
-    const query = token ? `?token=${token}` : '';
+    const query = token ? `?token=${encodeURIComponent(token)}` : '';
     this.url = `${protocol}//${host}${cleanPath}${query}`;
   }
 
@@ -35,8 +38,9 @@ export class ReconnectingWebSocket {
           const payload = JSON.parse(event.data);
           if (payload.type === 'pong') return;
 
-          if (payload.type) {
-            this.emit(payload.type, payload);
+          const eventType = payload.type || payload.action;
+          if (eventType) {
+            this.emit(eventType, payload);
           }
           this.emit('_all', payload);
         } catch (e) {

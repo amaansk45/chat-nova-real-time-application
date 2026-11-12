@@ -160,6 +160,14 @@ export class WebRTCManager {
     }
   }
 
+  public getLocalStream(): MediaStream | null {
+    return this.localStream;
+  }
+
+  public getRemoteStream(): MediaStream | null {
+    return this.remoteStream;
+  }
+
   public hangup(): void {
     if (this.screenStream) {
       this.screenStream.getTracks().forEach((t) => t.stop());
