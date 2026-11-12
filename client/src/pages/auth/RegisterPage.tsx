@@ -46,12 +46,19 @@ export const RegisterPage: React.FC = () => {
 
     setIsLoading(true);
     try {
+      const parts = (fullName || username).trim().split(' ');
+      const firstName = parts[0] || username;
+      const lastName = parts.slice(1).join(' ') || '';
+
       const res = await register({
-        username,
-        email,
-        phone_number: phoneNumber || undefined,
+        username: username.trim(),
+        email: email.trim().toLowerCase(),
+        phone_number: phoneNumber ? phoneNumber.trim() : undefined,
         password,
-        full_name: fullName || username,
+        password_confirm: confirmPassword || password,
+        first_name: firstName,
+        last_name: lastName,
+        full_name: fullName.trim() || username.trim(),
       });
 
       if (res.requires_otp) {
@@ -62,7 +69,28 @@ export const RegisterPage: React.FC = () => {
         navigate('/chat');
       }
     } catch (err: any) {
-      const msg = err.response?.data?.detail || err.response?.data?.username?.[0] || err.response?.data?.email?.[0] || 'Registration failed.';
+      let msg = 'Registration failed.';
+      if (err.response?.data) {
+        const data = err.response.data;
+        if (typeof data === 'string') {
+          msg = data;
+        } else if (data.detail) {
+          msg = data.detail;
+        } else if (data.message) {
+          msg = data.message;
+        } else if (typeof data === 'object') {
+          // Extract first validation error
+          const keys = Object.keys(data);
+          if (keys.length > 0) {
+            const firstKey = keys[0];
+            const val = data[firstKey];
+            const errorText = Array.isArray(val) ? val[0] : String(val);
+            msg = firstKey === 'non_field_errors' ? errorText : `${firstKey}: ${errorText}`;
+          }
+        }
+      } else if (err.message && err.message.includes('Network Error')) {
+        msg = 'Cannot connect to backend server. Please verify the server is running on port 8000.';
+      }
       showToast(msg, 'error');
     } finally {
       setIsLoading(false);

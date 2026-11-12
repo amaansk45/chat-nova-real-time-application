@@ -9,6 +9,7 @@ export interface ModalProps {
   description?: string;
   children: React.ReactNode;
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
+  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -17,8 +18,10 @@ export const Modal: React.FC<ModalProps> = ({
   title,
   description,
   children,
-  maxWidth = 'md'
+  maxWidth,
+  size,
 }) => {
+  const effectiveSize = size || maxWidth || 'md';
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isOpen) {
@@ -51,7 +54,7 @@ export const Modal: React.FC<ModalProps> = ({
       <div
         className={clsx(
           "relative w-full bg-nova-card border border-nova-border rounded-2xl shadow-2xl p-6 overflow-hidden z-10 animate-slide-up",
-          maxWidthStyles[maxWidth]
+          maxWidthStyles[effectiveSize]
         )}
       >
         <div className="flex items-start justify-between mb-4">

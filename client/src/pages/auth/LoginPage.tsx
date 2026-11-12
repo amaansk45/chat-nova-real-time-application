@@ -42,7 +42,12 @@ export const LoginPage: React.FC = () => {
         navigate('/chat');
       }
     } catch (err: any) {
-      const msg = err.response?.data?.detail || 'Invalid email or password.';
+      let msg = 'Invalid email or password.';
+      if (err.response?.data?.detail) {
+        msg = err.response.data.detail;
+      } else if (err.message && err.message.includes('Network Error')) {
+        msg = 'Cannot connect to backend server. Please verify backend is running on port 8000.';
+      }
       showToast(msg, 'error');
     } finally {
       setIsLoading(false);

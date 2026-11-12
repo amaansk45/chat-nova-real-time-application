@@ -8,7 +8,11 @@ interface AuthContextType {
   isLoading: boolean;
   login: (identifier: string, password: string) => Promise<{ requires_2fa?: boolean; identifier?: string }>;
   verify2FA: (identifier: string, code: string) => Promise<void>;
-  register: (data: any) => Promise<void>;
+  register: (data: any) => Promise<{ requires_otp?: boolean; user?: User }>;
+  verifyOTP: (identifier: string, code: string, type?: string) => Promise<any>;
+  resendOTP: (identifier: string, type?: string) => Promise<any>;
+  forgotPassword: (identifier: string) => Promise<any>;
+  resetPassword: (identifier: string, code: string, newPassword: string) => Promise<any>;
   logout: () => Promise<void>;
   updateUser: (updatedData: Partial<User>) => void;
   refreshUser: () => Promise<void>;
@@ -34,7 +38,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const refreshUser = async () => {
     try {
-      const res = await api.get('/auth/me/');
+      const res = await api.get('/api/auth/me/');
       setUser(res.data);
       localStorage.setItem('chatnova_user', JSON.stringify(res.data));
     } catch {
@@ -43,7 +47,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const login = async (identifier: string, password: string) => {
-    const res = await api.post('/auth/login/', { identifier, password });
+    const res = await api.post('/api/auth/login/', { identifier, password });
     if (res.data.requires_2fa) {
       return { requires_2fa: true, identifier: res.data.identifier };
     }
@@ -57,7 +61,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const verify2FA = async (identifier: string, code: string) => {
-    const res = await api.post('/auth/login/2fa/', { identifier, code });
+    const res = await api.post('/api/auth/login/2fa/', { identifier, code });
     const { tokens, user: userData } = res.data;
     localStorage.setItem('chatnova_access_token', tokens.access);
     localStorage.setItem('chatnova_refresh_token', tokens.refresh);
@@ -66,18 +70,62 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const register = async (data: any) => {
-    const res = await api.post('/auth/register/', data);
+    const res = await api.post('/api/auth/register/', data);
+    if (res.data.requires_otp) {
+      return { requires_otp: true };
+    }
     const { tokens, user: userData } = res.data;
-    localStorage.setItem('chatnova_access_token', tokens.access);
-    localStorage.setItem('chatnova_refresh_token', tokens.refresh);
-    localStorage.setItem('chatnova_user', JSON.stringify(userData));
-    setUser(userData);
+    if (tokens) {
+      localStorage.setItem('chatnova_access_token', tokens.access);
+      localStorage.setItem('chatnova_refresh_token', tokens.refresh);
+    }
+    if (userData) {
+      localStorage.setItem('chatnova_user', JSON.stringify(userData));
+      setUser(userData);
+    }
+    return { requires_otp: false, user: userData };
+  };
+
+  const verifyOTP = async (identifier: string, code: string, type: string = 'registration') => {
+    const res = await api.post('/api/auth/verify-otp/', {
+      identifier,
+      otp_code: code,
+      type,
+    });
+    if (res.data.tokens) {
+      localStorage.setItem('chatnova_access_token', res.data.tokens.access);
+      localStorage.setItem('chatnova_refresh_token', res.data.tokens.refresh);
+    }
+    if (res.data.user) {
+      localStorage.setItem('chatnova_user', JSON.stringify(res.data.user));
+      setUser(res.data.user);
+    }
+    return res.data;
+  };
+
+  const resendOTP = async (identifier: string, type: string = 'registration') => {
+    const res = await api.post('/api/auth/resend-otp/', { identifier, type });
+    return res.data;
+  };
+
+  const forgotPassword = async (identifier: string) => {
+    const res = await api.post('/api/auth/forgot-password/', { identifier });
+    return res.data;
+  };
+
+  const resetPassword = async (identifier: string, code: string, newPassword: string) => {
+    const res = await api.post('/api/auth/reset-password/', {
+      identifier,
+      otp_code: code,
+      new_password: newPassword,
+    });
+    return res.data;
   };
 
   const logout = async () => {
     try {
       const refresh = localStorage.getItem('chatnova_refresh_token');
-      await api.post('/auth/logout/', { refresh_token: refresh });
+      await api.post('/api/auth/logout/', { refresh_token: refresh });
     } catch {}
     localStorage.removeItem('chatnova_access_token');
     localStorage.removeItem('chatnova_refresh_token');
@@ -103,6 +151,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         verify2FA,
         register,
+        verifyOTP,
+        resendOTP,
+        forgotPassword,
+        resetPassword,
         logout,
         updateUser,
         refreshUser,

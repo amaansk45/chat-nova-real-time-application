@@ -68,9 +68,17 @@ class GroupDetailsSerializer(serializers.ModelSerializer):
 
 
 class CreateGroupSerializer(serializers.Serializer):
-    title = serializers.CharField(max_length=200, required=True)
+    title = serializers.CharField(max_length=200, required=False, default='')
+    name = serializers.CharField(max_length=200, required=False, default='')
     description = serializers.CharField(required=False, allow_blank=True, default='')
     member_ids = serializers.ListField(child=serializers.UUIDField(), required=False, default=list)
+
+    def validate(self, attrs):
+        title = attrs.get('title') or attrs.get('name')
+        if not title:
+            raise serializers.ValidationError({'name': 'Group title or name is required.'})
+        attrs['title'] = title
+        return attrs
 
 
 class GroupPermissionsSerializer(serializers.Serializer):

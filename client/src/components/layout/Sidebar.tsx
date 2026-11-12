@@ -7,21 +7,29 @@ import {
 import { clsx } from 'clsx';
 import { Avatar } from '../ui/Avatar';
 import { User } from '../../types';
+import { useAuth } from '../../context/AuthContext';
 
-interface SidebarProps {
-  currentUser: User | null;
+export interface SidebarProps {
+  currentUser?: User | null;
   unreadMessagesTotal?: number;
   missedCallsTotal?: number;
   onLogout?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
-  currentUser,
+  currentUser: propUser,
   unreadMessagesTotal = 0,
   missedCallsTotal = 0,
   onLogout
 }) => {
+  const { user: authUser, logout } = useAuth();
+  const currentUser = propUser !== undefined ? propUser : authUser;
   const navigate = useNavigate();
+
+  const handleLogout = () => {
+    if (onLogout) onLogout();
+    else logout();
+  };
 
   const navItems = [
     { to: '/chat', icon: MessageSquare, label: 'Chats', badge: unreadMessagesTotal },
@@ -102,15 +110,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
           />
         </NavLink>
 
-        {onLogout && (
-          <button
-            onClick={onLogout}
-            title="Log Out"
-            className="w-10 h-10 rounded-xl flex items-center justify-center text-nova-muted hover:text-nova-error hover:bg-nova-card transition-colors"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
-        )}
+        <button
+          onClick={handleLogout}
+          title="Log Out"
+          className="w-10 h-10 rounded-xl flex items-center justify-center text-nova-muted hover:text-nova-error hover:bg-nova-card transition-colors"
+        >
+          <LogOut className="w-4 h-4" />
+        </button>
       </div>
     </aside>
   );

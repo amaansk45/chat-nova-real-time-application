@@ -205,6 +205,89 @@ class GroupMemberActionAPIView(APIView):
         return Response({'message': msg, 'current_role': getattr(target_membership, 'role', 'removed')})
 
 
+class GroupMemberPromoteAPIView(APIView):
+    """Promote a group member to admin."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, group_id, member_id):
+        conv = Conversation.objects.filter(id=group_id, type='group', members__user=request.user).first()
+        if not conv:
+            return Response({'detail': 'Group not found.'}, status=status.HTTP_404_NOT_FOUND)
+        my_role = conv.members.filter(user=request.user).values_list('role', flat=True).first()
+        if my_role not in ['owner', 'admin']:
+            return Response({'detail': 'Only group admins can promote members.'}, status=status.HTTP_403_FORBIDDEN)
+        target = conv.members.filter(id=member_id).first() or conv.members.filter(user_id=member_id).first()
+        if not target:
+            return Response({'detail': 'Member not found.'}, status=status.HTTP_404_NOT_FOUND)
+        target.role = 'admin'
+        target.save(update_fields=['role'])
+        if hasattr(conv, 'group_details'):
+            GroupAdmin.objects.get_or_create(group=conv.group_details, user=target.user, defaults={'role': 'admin'})
+        return Response({'message': f'{target.user.username} promoted to admin.', 'role': 'admin'})
+
+
+class GroupMemberDemoteAPIView(APIView):
+    """Demote a group admin to regular member."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, group_id, member_id):
+        conv = Conversation.objects.filter(id=group_id, type='group', members__user=request.user).first()
+        if not conv:
+            return Response({'detail': 'Group not found.'}, status=status.HTTP_404_NOT_FOUND)
+        my_role = conv.members.filter(user=request.user).values_list('role', flat=True).first()
+        if my_role not in ['owner', 'admin']:
+            return Response({'detail': 'Only group admins can demote members.'}, status=status.HTTP_403_FORBIDDEN)
+        target = conv.members.filter(id=member_id).first() or conv.members.filter(user_id=member_id).first()
+        if not target:
+            return Response({'detail': 'Member not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if target.role == 'owner':
+            return Response({'detail': 'Cannot demote the group owner.'}, status=status.HTTP_400_BAD_REQUEST)
+        target.role = 'member'
+        target.save(update_fields=['role'])
+        if hasattr(conv, 'group_details'):
+            GroupAdmin.objects.filter(group=conv.group_details, user=target.user).delete()
+        return Response({'message': f'{target.user.username} demoted to member.', 'role': 'member'})
+
+
+class GroupMemberDeleteAPIView(APIView):
+    """Remove a member from the group."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def delete(self, request, group_id, member_id):
+        conv = Conversation.objects.filter(id=group_id, type='group', members__user=request.user).first()
+        if not conv:
+            return Response({'detail': 'Group not found.'}, status=status.HTTP_404_NOT_FOUND)
+        my_role = conv.members.filter(user=request.user).values_list('role', flat=True).first()
+        if my_role not in ['owner', 'admin']:
+            return Response({'detail': 'Only group admins can remove members.'}, status=status.HTTP_403_FORBIDDEN)
+        target = conv.members.filter(id=member_id).first() or conv.members.filter(user_id=member_id).first()
+        if not target:
+            return Response({'detail': 'Member not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if target.role == 'owner':
+            return Response({'detail': 'Cannot remove the group owner.'}, status=status.HTTP_400_BAD_REQUEST)
+        u_id = target.user_id
+        target.delete()
+        if hasattr(conv, 'group_details'):
+            GroupAdmin.objects.filter(group=conv.group_details, user_id=u_id).delete()
+        return Response({'message': 'Member removed successfully.'})
+
+
+class GroupLeaveAPIView(APIView):
+    """Leave a group conversation."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, group_id):
+        conv = Conversation.objects.filter(id=group_id, type='group', members__user=request.user).first()
+        if not conv:
+            return Response({'detail': 'Group not found.'}, status=status.HTTP_404_NOT_FOUND)
+        ConversationMember.objects.filter(conversation=conv, user=request.user).delete()
+        if hasattr(conv, 'group_details'):
+            GroupAdmin.objects.filter(group=conv.group_details, user=request.user).delete()
+        if conv.members.count() == 0:
+            conv.delete()
+        return Response({'message': 'You have left the group.'})
+
+
 class GroupInviteLinkAPIView(APIView):
     """Retrieve or reset group invitation link."""
     permission_classes = [permissions.IsAuthenticated]

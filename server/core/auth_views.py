@@ -257,12 +257,29 @@ class ActiveSessionsAPIView(APIView):
         return Response(DeviceSessionSerializer(sessions, many=True).data)
 
 
+class ChangePasswordAPIView(APIView):
+    """Change user password while authenticated."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        old_password = request.data.get('old_password')
+        new_password = request.data.get('new_password')
+        if not user.check_password(old_password):
+            return Response({'detail': 'Current password is incorrect.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not new_password or len(new_password) < 8:
+            return Response({'detail': 'New password must be at least 8 characters long.'}, status=status.HTTP_400_BAD_REQUEST)
+        user.set_password(new_password)
+        user.save()
+        return Response({'message': 'Password changed successfully.'})
+
+
 class RevokeSessionAPIView(APIView):
     """Revoke a specific session or all other sessions."""
     permission_classes = [permissions.IsAuthenticated]
 
-    def post(self, request):
-        session_id = request.data.get('session_id')
+    def post(self, request, session_id=None):
+        sid = session_id or request.data.get('session_id')
         revoke_all_others = request.data.get('revoke_all_others', False)
         
         if revoke_all_others:
@@ -270,8 +287,8 @@ class RevokeSessionAPIView(APIView):
             UserSession.objects.filter(user=request.user).exclude(session_token=current_token).update(is_revoked=True)
             return Response({'message': 'All other sessions have been terminated.'})
             
-        if session_id:
-            UserSession.objects.filter(user=request.user, id=session_id).update(is_revoked=True)
+        if sid:
+            UserSession.objects.filter(user=request.user, id=sid).update(is_revoked=True)
             return Response({'message': 'Session revoked successfully.'})
             
         return Response({'detail': 'session_id or revoke_all_others required.'}, status=status.HTTP_400_BAD_REQUEST)
