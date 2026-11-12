@@ -36,6 +36,10 @@ class InitiateCallAPIView(APIView):
             conv = None
             if conv_id:
                 conv = Conversation.objects.filter(id=conv_id, members__user=request.user).first()
+                if not target_user and conv:
+                    other_member = conv.members.exclude(user=request.user).first()
+                    if other_member:
+                        target_user = other_member.user
 
             room_id = f"room_{uuid.uuid4().hex[:12]}"
             call_obj = Call.objects.create(
@@ -67,19 +71,34 @@ class InitiateCallAPIView(APIView):
                 # Send real-time incoming call alert to recipient
                 try:
                     if channel_layer:
+                        call_notification = {
+                            'type': 'incoming_call',
+                            'action': 'incoming_call',
+                            'call_id': str(call_obj.id),
+                            'room_id': room_id,
+                            'call_type': call_type,
+                            'caller': ContactUserSerializer(request.user).data,
+                            'conversation_id': str(conv.id) if conv else None,
+                        }
                         async_to_sync(channel_layer.group_send)(
                             f"user_{target_user.id}",
                             {
                                 'type': 'send_notification_event',
-                                'notification': {
-                                    'action': 'incoming_call',
+                                'notification': call_notification,
+                            }
+                        )
+                        if conv:
+                            async_to_sync(channel_layer.group_send)(
+                                f"chat_{conv.id}",
+                                {
+                                    'type': 'call_incoming_event',
                                     'call_id': str(call_obj.id),
                                     'room_id': room_id,
                                     'call_type': call_type,
                                     'caller': ContactUserSerializer(request.user).data,
+                                    'conversation_id': str(conv.id),
                                 }
-                            }
-                        )
+                            )
                 except Exception as e:
                     print(f"Call notification dispatch failed: {e}")
 
@@ -135,7 +154,7 @@ class CallActionAPIView(APIView):
                 call_obj.ended_at = timezone.now()
                 call_obj.save(update_fields=['status', 'ended_at'])
 
-            # Broadcast call status update to room
+            # Broadcast call status update to room and conversation
             try:
                 if channel_layer:
                     async_to_sync(channel_layer.group_send)(
@@ -148,6 +167,17 @@ class CallActionAPIView(APIView):
                             'payload': {'call_id': str(call_obj.id), 'status': call_obj.status}
                         }
                     )
+                    if call_obj.conversation:
+                        async_to_sync(channel_layer.group_send)(
+                            f"chat_{call_obj.conversation_id}",
+                            {
+                                'type': 'call_status_event',
+                                'call_id': str(call_obj.id),
+                                'room_id': call_obj.room_id,
+                                'status': call_obj.status,
+                                'action': action,
+                            }
+                        )
             except Exception:
                 pass
 
