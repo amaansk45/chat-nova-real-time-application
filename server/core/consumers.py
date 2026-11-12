@@ -86,10 +86,21 @@ class ChatConsumer(AsyncWebsocketConsumer):
         except Exception:
             return
 
-        action = data.get('action')
+        action = data.get('action') or data.get('type')
 
-        if action == 'chat_message':
+        if action in ['chat_message', 'message']:
             await self.handle_chat_message(data)
+        elif action == 'typing':
+            is_typing = bool(data.get('is_typing', True))
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    'type': 'typing_status_event',
+                    'user_id': str(self.user.id),
+                    'username': self.user.username,
+                    'is_typing': is_typing,
+                }
+            )
         elif action == 'typing_start':
             await self.channel_layer.group_send(
                 self.room_group_name,
@@ -118,12 +129,36 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     self.room_group_name,
                     {
                         'type': 'read_receipt_event',
-                        'message_id': message_id,
+                        'message_id': str(message_id),
                         'user_id': str(self.user.id),
                         'username': self.user.username,
                         'read_at': timezone.now().isoformat(),
                     }
                 )
+        elif action == 'mark_all_read':
+            await self.mark_conversation_messages_read()
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    'type': 'all_messages_read_event',
+                    'user_id': str(self.user.id),
+                    'username': self.user.username,
+                    'conversation_id': str(self.conversation_id),
+                }
+            )
+        elif action == 'call_signal':
+            # Direct relay of WebRTC signaling within conversation room
+            signal_type = data.get('signal_type')
+            payload = data.get('payload', {})
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    'type': 'call_signal_relay_event',
+                    'sender_id': str(self.user.id),
+                    'signal_type': signal_type,
+                    'payload': payload,
+                }
+            )
         elif action == 'reaction_add':
             message_id = data.get('message_id')
             emoji = data.get('emoji')
@@ -226,6 +261,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
     # Event Handlers dispatched from channel layer
     async def broadcast_message_event(self, event):
         await self.send(text_data=json.dumps({
+            'type': 'new_message',
             'action': 'new_message',
             'message': event['message'],
         }))
@@ -234,7 +270,9 @@ class ChatConsumer(AsyncWebsocketConsumer):
         # Don't echo typing status back to self
         if event['user_id'] != str(self.user.id):
             await self.send(text_data=json.dumps({
+                'type': 'typing_status',
                 'action': 'typing_status',
+                'user': event['username'],
                 'user_id': event['user_id'],
                 'username': event['username'],
                 'is_typing': event['is_typing'],
@@ -242,6 +280,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     async def read_receipt_event(self, event):
         await self.send(text_data=json.dumps({
+            'type': 'message_read',
             'action': 'message_read',
             'message_id': event['message_id'],
             'user_id': event['user_id'],
@@ -249,8 +288,48 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'read_at': event['read_at'],
         }))
 
+    async def all_messages_read_event(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'all_messages_read',
+            'action': 'all_messages_read',
+            'user_id': event['user_id'],
+            'username': event['username'],
+            'conversation_id': event['conversation_id'],
+        }))
+
+    async def call_incoming_event(self, event):
+        if event.get('caller', {}).get('id') != str(self.user.id):
+            await self.send(text_data=json.dumps({
+                'type': 'incoming_call',
+                'action': 'incoming_call',
+                'call_id': event['call_id'],
+                'room_id': event['room_id'],
+                'call_type': event['call_type'],
+                'caller': event['caller'],
+                'conversation_id': event.get('conversation_id'),
+            }))
+
+    async def call_status_event(self, event):
+        await self.send(text_data=json.dumps({
+            'type': f"call_{event['action']}",
+            'action': f"call_{event['action']}",
+            'call_id': event['call_id'],
+            'room_id': event['room_id'],
+            'status': event['status'],
+        }))
+
+    async def call_signal_relay_event(self, event):
+        if event['sender_id'] != str(self.user.id):
+            await self.send(text_data=json.dumps({
+                'type': event['signal_type'],
+                'action': event['signal_type'],
+                'sender_id': event['sender_id'],
+                'payload': event['payload'],
+            }))
+
     async def reaction_update_event(self, event):
         await self.send(text_data=json.dumps({
+            'type': 'reaction_updated',
             'action': 'reaction_updated',
             'message_id': event['message_id'],
             'user_id': event['user_id'],
@@ -261,6 +340,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     async def message_edited_event(self, event):
         await self.send(text_data=json.dumps({
+            'type': 'message_edited',
             'action': 'message_edited',
             'message_id': event['message_id'],
             'content': event['content'],
@@ -269,6 +349,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     async def message_deleted_event(self, event):
         await self.send(text_data=json.dumps({
+            'type': 'message_deleted',
             'action': 'message_deleted',
             'message_id': event['message_id'],
             'for_everyone': event['for_everyone'],
@@ -277,6 +358,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     async def user_presence_event(self, event):
         await self.send(text_data=json.dumps({
+            'type': 'user_presence',
             'action': 'user_presence',
             'user_id': event['user_id'],
             'username': event['username'],
@@ -326,6 +408,21 @@ class ChatConsumer(AsyncWebsocketConsumer):
             )
         except Exception:
             pass
+
+    @database_sync_to_async
+    def mark_conversation_messages_read(self):
+        try:
+            conv = Conversation.objects.get(id=self.conversation_id)
+            other_msgs = conv.messages.exclude(sender=self.user)
+            for m in other_msgs:
+                MessageReceipt.objects.update_or_create(
+                    message=m,
+                    user=self.user,
+                    defaults={'status': 'read', 'timestamp': timezone.now()}
+                )
+            ConversationMember.objects.filter(conversation=conv, user=self.user).update(unread_count=0)
+        except Exception as e:
+            print(f"Error marking messages read: {e}")
 
     @database_sync_to_async
     def save_message_reaction(self, message_id, emoji):
